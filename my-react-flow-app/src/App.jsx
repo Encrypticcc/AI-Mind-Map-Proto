@@ -1,11 +1,18 @@
-import { useState, useCallback } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useCallback, useState } from 'react';
  
 const initialNodes = [
-  { id: 'n1', position: { x: 0, y: 0 }, data: { label: 'Node 1' } },
-  { id: 'n2', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
-  { id: 'n3', position: { x: 0, y: 200 }, data: { label: 'Node 3' } },
+  { id: 'n1', position: { x: 0, y: 0 }, data: { label: 'Node 1' }, style: { width: 100, height: 100 } },
+  { id: 'n2', position: { x: 0, y: 200 }, data: { label: 'Node 2' }, style: { width: 100, height: 100 } },
 ];
 const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
  
@@ -35,7 +42,11 @@ export default function App() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-      />
+      >
+        <Controls />
+        <MiniMap />
+        <Background variant="dots" gap={12} size={1} />
+      </ReactFlow>
     </div>
   );
 }
