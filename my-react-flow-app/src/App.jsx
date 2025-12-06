@@ -12,7 +12,7 @@
   useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const NoteNode = ({ data }) => {
   return (
@@ -36,21 +36,21 @@ const initialNodes = [
     type: 'note',
     position: { x: 0, y: 0 },
     data: { label: 'Node 1', notes: 'Key milestone' },
-    style: { width: 120, height: 80 },
+    style: { minWidth: 120, minHeight: 80 },
   },
   {
     id: 'n2',
     type: 'note',
     position: { x: 180, y: 140 },
     data: { label: 'Node 2', notes: 'Follow-up task' },
-    style: { width: 120, height: 80 },
+    style: { minWidth: 120, minHeight: 80 },
   },
     {
     id: 'n3',
     type: 'note',
     position: { x: -180, y: 140 },
     data: { label: 'Node 3', notes: 'Follow-up task' },
-    style: { width: 120, height: 80 },
+    style: { minWidth: 120, minHeight: 80 },
   },
 ];
 const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
@@ -61,9 +61,32 @@ function FlowCanvas() {
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? null);
   const [inspectorLabel, setInspectorLabel] = useState(initialNodes[0]?.data.label ?? '');
   const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
-  const { screenToFlowPosition } = useReactFlow();
+  const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const { screenToFlowPosition, setCenter } = useReactFlow();
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const nodesById = useMemo(() => {
+    const map = new Map();
+    nodes.forEach((node) => map.set(node.id, node));
+    return map;
+  }, [nodes]);
+
+  const childrenMap = useMemo(() => {
+    const map = new Map();
+    edges.forEach((edge) => {
+      const list = map.get(edge.source) ?? [];
+      list.push(edge.target);
+      map.set(edge.source, list);
+    });
+    return map;
+  }, [edges]);
+
+  const roots = useMemo(() => {
+    const targets = new Set(edges.map((edge) => edge.target));
+    const rootNodes = nodes.filter((node) => !targets.has(node.id));
+    return rootNodes.length ? rootNodes : nodes;
+  }, [nodes, edges]);
 
   useEffect(() => {
     if (selectedNode) {
@@ -104,6 +127,109 @@ function FlowCanvas() {
     }
   }, []);
 
+  const toggleCollapse = useCallback((nodeId) => {
+    setCollapsedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleJumpToNode = useCallback(
+    (nodeId) => {
+      const node = nodesById.get(nodeId);
+      if (!node) return;
+      setSelectedNodeId(nodeId);
+      const width = node.width ?? node.style?.width ?? node.style?.minWidth ?? 0;
+      const height = node.height ?? node.style?.height ?? node.style?.minHeight ?? 0;
+      const centerX = node.position.x + width / 2;
+      const centerY = node.position.y + height / 2;
+      setCenter(centerX, centerY, { zoom: 1.2, duration: 400 });
+    },
+    [nodesById, setCenter],
+  );
+
+  const searchTermValue = searchTerm.trim().toLowerCase();
+  const matchesSearch = useCallback(
+    (node) => {
+      if (!searchTermValue) return false;
+      const label = (node?.data?.label ?? '').toLowerCase();
+      const notes = (node?.data?.notes ?? '').toLowerCase();
+      return label.includes(searchTermValue) || notes.includes(searchTermValue);
+    },
+    [searchTermValue],
+  );
+
+  const renderTree = useCallback(
+    (nodeId, depth = 0) => {
+      const node = nodesById.get(nodeId);
+      if (!node) return null;
+
+      const rawChildren = (childrenMap.get(nodeId) ?? []).filter((id) => nodesById.has(id));
+      const renderedChildren = rawChildren
+        .map((childId) => renderTree(childId, depth + 1))
+        .filter(Boolean);
+
+      const hasVisibleChildren = renderedChildren.length > 0;
+      const isMatch = matchesSearch(node);
+
+      if (searchTermValue && !isMatch && !hasVisibleChildren) {
+        return null;
+      }
+
+      const forcedOpen = Boolean(searchTermValue) && (isMatch || hasVisibleChildren);
+      const isCollapsed = forcedOpen ? false : collapsedNodes.has(nodeId);
+
+      return (
+        <div className="tree-item" key={node.id}>
+          <div className="tree-row" style={{ paddingLeft: 8 + depth * 14 }}>
+            {rawChildren.length ? (
+              <button
+                type="button"
+                className="tree-toggle"
+                aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                onClick={() => toggleCollapse(node.id)}
+                disabled={forcedOpen}
+              >
+                {isCollapsed ? '+' : '−'}
+              </button>
+            ) : (
+              <span className="tree-toggle placeholder" aria-hidden="true" />
+            )}
+            <button
+              type="button"
+              className={`tree-label${node.id === selectedNodeId ? ' active' : ''}${
+                isMatch ? ' match' : ''
+              }`}
+              onClick={() => handleJumpToNode(node.id)}
+            >
+              {node.data?.label ?? node.id}
+            </button>
+          </div>
+          {!isCollapsed && renderedChildren.length ? (
+            <div className="tree-children">{renderedChildren}</div>
+          ) : null}
+        </div>
+      );
+    },
+    [
+      childrenMap,
+      collapsedNodes,
+      handleJumpToNode,
+      matchesSearch,
+      nodesById,
+      searchTermValue,
+      selectedNodeId,
+      toggleCollapse,
+    ],
+  );
+
+  const rootTreeItems = useMemo(() => roots.map((root) => renderTree(root.id)).filter(Boolean), [renderTree, roots]);
+
   const onPaneContextMenu = useCallback(
     (event) => {
       event.preventDefault();
@@ -116,8 +242,8 @@ function FlowCanvas() {
           id: newId,
           type: 'note',
           position,
-          data: { label: 'New Node', notes: '' },
-          style: { width: 120, height: 80 },
+          data: { label: 'Untitled Node', notes: 'Describe what this node should do…' },
+          style: { minWidth: 120, minHeight: 80 },
         },
       ]);
       setSelectedNodeId(newId);
@@ -175,12 +301,18 @@ function FlowCanvas() {
             </ul>
           </div>
           <div className="panel">
-            <div className="panel-header">Outline</div>
-            <ul className="list">
-              <li className="list-item">North Star</li>
-              <li className="list-item">Opportunities</li>
-              <li className="list-item">Risks</li>
-            </ul>
+            <div className="panel-header">Hierarchy</div>
+            <div className="hierarchy-search">
+              <input
+                type="text"
+                placeholder="Search nodes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="tree">
+              {rootTreeItems.length ? rootTreeItems : <div className="empty-state">No nodes match your search.</div>}
+            </div>
           </div>
           <div className="panel">
             <div className="panel-header">Versions</div>
@@ -196,7 +328,7 @@ function FlowCanvas() {
           <div className="canvas-header">
             <div>
               <div className="eyebrow">Current canvas</div>
-              <div className="title">Journey Map</div>
+              <div className="title">FPS Game</div>
             </div>
             <div className="canvas-actions">
               <button className="ghost">Fit View</button>
@@ -265,7 +397,7 @@ function FlowCanvas() {
 
       <footer className="status-bar">
         <div>Status: Connected</div>
-        <div>Nodes: {nodes.length} · Edges: {edges.length}</div>
+        <div>Nodes: {nodes.length} · Connections: {edges.length}</div>
         <div>Draft autosaved 2m ago</div>
       </footer>
     </div>

@@ -273,7 +273,7 @@ input, textarea {
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  height: 100%;
+  min-height: 80px;
   padding: 10px 12px;
   background: #ffffff;
   border: 1px solid #d5d9e3;
@@ -292,4 +292,85 @@ input, textarea {
   color: #2f3b4f;
   white-space: pre-wrap;
   line-height: 1.35;
+}
+
+.hierarchy-search {
+  margin-bottom: 10px;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.tree-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--ghost);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.tree-toggle.placeholder {
+  width: 24px;
+  height: 24px;
+}
+
+.tree-label {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.tree-label:hover {
+  background: var(--ghost);
+  border-color: var(--border);
+}
+
+.tree-label.active {
+  border-color: var(--accent);
+  background: rgba(124, 240, 200, 0.12);
+}
+
+.tree-label.match {
+  color: var(--accent);
+}
+
+.tree-children {
+  display: flex;
+  flex-direction: column;
+  margin-left: 24px;
+}
+
+.empty-state {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 0;
 }
