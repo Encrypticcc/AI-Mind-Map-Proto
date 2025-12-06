@@ -15,6 +15,8 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VersionControlPanel from './VersionControlPanel.jsx';
 
+const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
+
 const shallowEqualObjects = (a = {}, b = {}) => {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
@@ -147,21 +149,21 @@ const initialNodes = [
     type: 'note',
     position: { x: 0, y: 0 },
     data: { label: 'Node 1', notes: 'Key milestone' },
-    style: { minWidth: 120, minHeight: 80 },
+    style: { ...DEFAULT_NODE_STYLE },
   },
   {
     id: 'n2',
     type: 'note',
     position: { x: 180, y: 140 },
     data: { label: 'Node 2', notes: 'Follow-up task' },
-    style: { minWidth: 120, minHeight: 80 },
+    style: { ...DEFAULT_NODE_STYLE },
   },
   {
     id: 'n3',
     type: 'note',
     position: { x: -180, y: 140 },
     data: { label: 'Node 3', notes: 'Follow-up task' },
-    style: { minWidth: 120, minHeight: 80 },
+    style: { ...DEFAULT_NODE_STYLE },
   },
 ];
 const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
@@ -380,7 +382,7 @@ function FlowCanvas() {
           type: 'note',
           position,
           data: { label: 'Untitled Node', notes: 'Describe what this node should do.' },
-          style: { minWidth: 120, minHeight: 80 },
+          style: { ...DEFAULT_NODE_STYLE },
         },
       ]);
       setSelectedNodeId(newId);
@@ -555,6 +557,13 @@ function FlowCanvas() {
               <li className="list-item">v0.9</li>
             </ul>
           </div>
+          <div className="panel">
+            <div className="panel-header">AI Copilot</div>
+            <div className="ai-card">
+              <p>Ask for ideas, reword nodes, or auto-connect concepts.</p>
+              <button className="primary full">Ask AI</button>
+            </div>
+          </div>
         </aside>
 
         <section className="canvas-area">
@@ -603,13 +612,6 @@ function FlowCanvas() {
             lastSyncedVersion={lastSyncedVersion}
             getNodeLabel={(id) => nodesById.get(id)?.data?.label ?? id}
           />
-          <div className="panel">
-            <div className="panel-header">AI Copilot</div>
-            <div className="ai-card">
-              <p>Ask for ideas, reword nodes, or auto-connect concepts.</p>
-              <button className="primary full">Ask AI</button>
-            </div>
-          </div>
           <div className="panel">
             <div className="panel-header">Node Inspector</div>
             {selectedNode ? (
