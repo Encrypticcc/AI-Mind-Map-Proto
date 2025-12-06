@@ -374,3 +374,29 @@ input, textarea {
   font-size: 13px;
   padding: 6px 0;
 }
+
+/* Themed scrollbars */
+* {
+  scrollbar-color: var(--ghost) var(--panel);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--panel);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ghost);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #2e3342;
+}
