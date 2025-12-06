@@ -77,12 +77,24 @@ body,
   box-shadow: var(--shadow);
 }
 
+.panel-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .panel-header {
   font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 8px;
+}
+
+.panel-subheader {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .list {
@@ -201,6 +213,12 @@ button {
 
 button:active {
   transform: translateY(1px);
+}
+
+.tiny {
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 
 .primary {
@@ -378,6 +396,97 @@ input, textarea {
   color: var(--muted);
   font-size: 13px;
   padding: 6px 0;
+}
+
+.vc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vc-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--ghost);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+}
+
+.vc-item.staged {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(124, 240, 200, 0.35);
+}
+
+.vc-item.unstaged {
+  opacity: 0.7;
+  border-color: var(--border);
+}
+
+.vc-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.vc-body input[type='checkbox'] {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.vc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vc-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.vc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tag {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(124, 240, 200, 0.12);
+  border: 1px solid rgba(124, 240, 200, 0.28);
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
+.vc-footer {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vc-last-sync {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vc-quick {
+  display: flex;
+  gap: 6px;
+}
+
+.vc-id {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* Themed scrollbars */

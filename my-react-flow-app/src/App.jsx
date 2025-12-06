@@ -1,4 +1,4 @@
-﻿import {
+import {
   Background,
   Controls,
   Handle,
@@ -9,10 +9,121 @@
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
-  useReactFlow
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import VersionControlPanel from './VersionControlPanel.jsx';
+
+const shallowEqualObjects = (a = {}, b = {}) => {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+};
+
+const isNodeEqual = (a, b) => {
+  if (!a || !b) return false;
+  if (a.type !== b.type) return false;
+  if (!shallowEqualObjects(a.data ?? {}, b.data ?? {})) return false;
+  return true;
+};
+
+const isEdgeEqual = (a, b) => {
+  if (!a || !b) return false;
+  if (a.source !== b.source) return false;
+  if (a.target !== b.target) return false;
+  if ((a.sourceHandle ?? null) !== (b.sourceHandle ?? null)) return false;
+  if ((a.targetHandle ?? null) !== (b.targetHandle ?? null)) return false;
+  if (!shallowEqualObjects(a.data ?? {}, b.data ?? {})) return false;
+  return true;
+};
+
+const computePendingChanges = (nodes, edges, lastSyncedNodes, lastSyncedEdges) => {
+  const changes = [];
+
+  const syncedNodeMap = new Map(lastSyncedNodes.map((node) => [node.id, node]));
+  const currentNodeMap = new Map(nodes.map((node) => [node.id, node]));
+
+  nodes.forEach((node) => {
+    const previousNode = syncedNodeMap.get(node.id);
+    if (!previousNode) {
+      changes.push({
+        id: `node:${node.id}`,
+        kind: 'node',
+        changeType: 'added',
+        nodeId: node.id,
+        currentNode: node,
+      });
+    } else if (!isNodeEqual(node, previousNode)) {
+      changes.push({
+        id: `node:${node.id}`,
+        kind: 'node',
+        changeType: 'modified',
+        nodeId: node.id,
+        currentNode: node,
+        previousNode,
+      });
+    }
+  });
+
+  lastSyncedNodes.forEach((previousNode) => {
+    if (!currentNodeMap.has(previousNode.id)) {
+      changes.push({
+        id: `node:${previousNode.id}`,
+        kind: 'node',
+        changeType: 'removed',
+        nodeId: previousNode.id,
+        previousNode,
+      });
+    }
+  });
+
+  const syncedEdgeMap = new Map(lastSyncedEdges.map((edge) => [edge.id, edge]));
+  const currentEdgeMap = new Map(edges.map((edge) => [edge.id, edge]));
+
+  edges.forEach((edge) => {
+    const previousEdge = syncedEdgeMap.get(edge.id);
+    if (!previousEdge) {
+      changes.push({
+        id: `edge:${edge.id}`,
+        kind: 'edge',
+        changeType: 'added',
+        edgeId: edge.id,
+        currentEdge: edge,
+      });
+    } else if (!isEdgeEqual(edge, previousEdge)) {
+      changes.push({
+        id: `edge:${edge.id}`,
+        kind: 'edge',
+        changeType: 'modified',
+        edgeId: edge.id,
+        currentEdge: edge,
+        previousEdge,
+      });
+    }
+  });
+
+  lastSyncedEdges.forEach((previousEdge) => {
+    if (!currentEdgeMap.has(previousEdge.id)) {
+      changes.push({
+        id: `edge:${previousEdge.id}`,
+        kind: 'edge',
+        changeType: 'removed',
+        edgeId: previousEdge.id,
+        previousEdge,
+      });
+    }
+  });
+
+  return changes.sort((a, b) => {
+    if (a.kind === b.kind) return a.id.localeCompare(b.id);
+    return a.kind === 'node' ? -1 : 1;
+  });
+};
 
 const NoteNode = ({ data }) => {
   return (
@@ -45,7 +156,7 @@ const initialNodes = [
     data: { label: 'Node 2', notes: 'Follow-up task' },
     style: { minWidth: 120, minHeight: 80 },
   },
-    {
+  {
     id: 'n3',
     type: 'note',
     position: { x: -180, y: 140 },
@@ -58,12 +169,24 @@ const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
 function FlowCanvas() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
+  const [lastSyncedNodes, setLastSyncedNodes] = useState(initialNodes);
+  const [lastSyncedEdges, setLastSyncedEdges] = useState(initialEdges);
+  const [lastSyncedAt, setLastSyncedAt] = useState(new Date());
+  const [stagedChangeIds, setStagedChangeIds] = useState([]);
+  const [syncVersion, setSyncVersion] = useState(1);
+  const lastSyncedVersion = useMemo(() => `v${syncVersion}`, [syncVersion]);
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? null);
   const [inspectorLabel, setInspectorLabel] = useState(initialNodes[0]?.data.label ?? '');
   const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const seenChangeIdsRef = useRef(new Set());
   const { screenToFlowPosition, setCenter } = useReactFlow();
+
+  const pendingChanges = useMemo(
+    () => computePendingChanges(nodes, edges, lastSyncedNodes, lastSyncedEdges),
+    [nodes, edges, lastSyncedNodes, lastSyncedEdges],
+  );
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const nodesById = useMemo(() => {
@@ -97,6 +220,20 @@ function FlowCanvas() {
       setInspectorNotes('');
     }
   }, [selectedNode]);
+
+  useEffect(() => {
+    const pendingIds = pendingChanges.map((change) => change.id);
+    setStagedChangeIds((previous) => {
+      const next = previous.filter((id) => pendingIds.includes(id));
+      pendingIds.forEach((id) => {
+        if (!seenChangeIdsRef.current.has(id) && !next.includes(id)) {
+          next.push(id);
+        }
+      });
+      return next;
+    });
+    seenChangeIdsRef.current = new Set(pendingIds);
+  }, [pendingChanges]);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
@@ -195,7 +332,7 @@ function FlowCanvas() {
                 onClick={() => toggleCollapse(node.id)}
                 disabled={forcedOpen}
               >
-                {isCollapsed ? '+' : '−'}
+                {isCollapsed ? '+' : '-'}
               </button>
             ) : (
               <span className="tree-toggle placeholder" aria-hidden="true" />
@@ -242,7 +379,7 @@ function FlowCanvas() {
           id: newId,
           type: 'note',
           position,
-          data: { label: 'Untitled Node', notes: 'Describe what this node should do…' },
+          data: { label: 'Untitled Node', notes: 'Describe what this node should do.' },
           style: { minWidth: 120, minHeight: 80 },
         },
       ]);
@@ -276,6 +413,100 @@ function FlowCanvas() {
     [inspectorLabel, inspectorNotes, selectedNodeId],
   );
 
+  const handleToggleStage = useCallback((changeId) => {
+    setStagedChangeIds((prev) => (prev.includes(changeId) ? prev.filter((id) => id !== changeId) : [...prev, changeId]));
+  }, []);
+
+  const handleStageAll = useCallback(() => {
+    setStagedChangeIds(pendingChanges.map((change) => change.id));
+  }, [pendingChanges]);
+
+  const handleUnstageAll = useCallback(() => {
+    setStagedChangeIds([]);
+  }, []);
+
+  const handleRevertChange = useCallback(
+    (changeId) => {
+      const change = pendingChanges.find((item) => item.id === changeId);
+      if (!change) return;
+
+      if (change.kind === 'node') {
+        setNodes((current) => {
+          if (change.changeType === 'added') {
+            return current.filter((node) => node.id !== change.nodeId);
+          }
+          if (change.changeType === 'removed' && change.previousNode) {
+            if (current.find((node) => node.id === change.nodeId)) return current;
+            return [...current, change.previousNode];
+          }
+          if (change.changeType === 'modified' && change.previousNode) {
+            return current.map((node) => (node.id === change.nodeId ? change.previousNode : node));
+          }
+          return current;
+        });
+      } else {
+        setEdges((current) => {
+          if (change.changeType === 'added') {
+            return current.filter((edge) => edge.id !== change.edgeId);
+          }
+          if (change.changeType === 'removed' && change.previousEdge) {
+            if (current.find((edge) => edge.id === change.edgeId)) return current;
+            return [...current, change.previousEdge];
+          }
+          if (change.changeType === 'modified' && change.previousEdge) {
+            return current.map((edge) => (edge.id === change.edgeId ? change.previousEdge : edge));
+          }
+          return current;
+        });
+      }
+      setStagedChangeIds((prev) => prev.filter((id) => id !== changeId));
+    },
+    [pendingChanges],
+  );
+
+  const handleSync = useCallback(() => {
+    const stagedSet = new Set(stagedChangeIds);
+    if (!stagedSet.size && !pendingChanges.length) {
+      setLastSyncedAt(new Date());
+      setSyncVersion((prev) => prev + 1);
+      return;
+    }
+
+    setLastSyncedNodes((previousSynced) => {
+      const map = new Map(previousSynced.map((node) => [node.id, node]));
+      pendingChanges.forEach((change) => {
+        if (!stagedSet.has(change.id) || change.kind !== 'node') return;
+        if (change.changeType === 'added' && change.currentNode) {
+          map.set(change.nodeId, change.currentNode);
+        } else if (change.changeType === 'removed') {
+          map.delete(change.nodeId);
+        } else if (change.changeType === 'modified' && change.currentNode) {
+          map.set(change.nodeId, change.currentNode);
+        }
+      });
+      return Array.from(map.values());
+    });
+
+    setLastSyncedEdges((previousSynced) => {
+      const map = new Map(previousSynced.map((edge) => [edge.id, edge]));
+      pendingChanges.forEach((change) => {
+        if (!stagedSet.has(change.id) || change.kind !== 'edge') return;
+        if (change.changeType === 'added' && change.currentEdge) {
+          map.set(change.edgeId, change.currentEdge);
+        } else if (change.changeType === 'removed') {
+          map.delete(change.edgeId);
+        } else if (change.changeType === 'modified' && change.currentEdge) {
+          map.set(change.edgeId, change.currentEdge);
+        }
+      });
+      return Array.from(map.values());
+    });
+
+    setLastSyncedAt(new Date());
+    setSyncVersion((prev) => prev + 1);
+    setStagedChangeIds([]);
+  }, [pendingChanges, stagedChangeIds]);
+
   const handleLabelChange = (event) => setInspectorLabel(event.target.value);
   const handleNotesChange = (event) => setInspectorNotes(event.target.value);
   const nodeTypes = { note: NoteNode };
@@ -286,7 +517,9 @@ function FlowCanvas() {
         <div className="brand">AI Node Generator</div>
         <div className="top-actions">
           <button className="ghost">New Project</button>
-          <button className="primary">Sync</button>
+          <button className="primary" onClick={handleSync} disabled={!stagedChangeIds.length}>
+            Sync
+          </button>
         </div>
       </header>
 
@@ -317,9 +550,9 @@ function FlowCanvas() {
           <div className="panel">
             <div className="panel-header">Versions</div>
             <ul className="list compact">
-              <li className="list-item">v1.2 Today</li>
-              <li className="list-item">v1.1 Yesterday</li>
-              <li className="list-item">v1.0 Tuesday</li>
+              <li className="list-item">{lastSyncedVersion}</li>
+              <li className="list-item">v1.0</li>
+              <li className="list-item">v0.9</li>
             </ul>
           </div>
         </aside>
@@ -358,6 +591,18 @@ function FlowCanvas() {
         </section>
 
         <aside className="sidebar right">
+          <VersionControlPanel
+            pendingChanges={pendingChanges}
+            stagedChangeIds={stagedChangeIds}
+            onToggleStage={handleToggleStage}
+            onRevertChange={handleRevertChange}
+            onStageAll={handleStageAll}
+            onUnstageAll={handleUnstageAll}
+            onSync={handleSync}
+            lastSyncedAt={lastSyncedAt}
+            lastSyncedVersion={lastSyncedVersion}
+            getNodeLabel={(id) => nodesById.get(id)?.data?.label ?? id}
+          />
           <div className="panel">
             <div className="panel-header">AI Copilot</div>
             <div className="ai-card">
@@ -397,7 +642,7 @@ function FlowCanvas() {
 
       <footer className="status-bar">
         <div>Status: Connected</div>
-        <div>Nodes: {nodes.length} · Connections: {edges.length}</div>
+        <div>Nodes: {nodes.length} | Connections: {edges.length}</div>
         <div>Draft autosaved 2m ago</div>
       </footer>
     </div>
