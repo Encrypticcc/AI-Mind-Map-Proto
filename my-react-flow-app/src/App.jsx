@@ -15,7 +15,9 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VersionControlPanel from './VersionControlPanel.jsx';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
+const SYNC_ENDPOINT = '/api/generate-code-fake'; // Switch to /api/generate-code when ready for real calls
 
 const shallowEqualObjects = (a = {}, b = {}) => {
   const aKeys = Object.keys(a);
@@ -127,6 +129,48 @@ const computePendingChanges = (nodes, edges, lastSyncedNodes, lastSyncedEdges) =
   });
 };
 
+function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  if (!files || !files.length) return null;
+
+  const safeIndex = selectedIndex < files.length ? selectedIndex : 0;
+  const selected = files[safeIndex] || files[0];
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>Generated files</h2>
+          <div className="modal-actions">
+            {isSyncing ? <span className="tag">Syncing...</span> : null}
+            {syncError ? <span className="tag danger">Error</span> : null}
+            <button type="button" className="ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="modal-body">
+          <div className="file-list">
+            {files.map((file, index) => (
+              <button
+                key={file.path}
+                type="button"
+                className={`file-tab ${index === safeIndex ? 'active' : ''}`}
+                onClick={() => setSelectedIndex(index)}
+              >
+                {file.path}
+              </button>
+            ))}
+          </div>
+          <pre className="file-contents">{selected?.contents ?? ''}</pre>
+        </div>
+        {syncError ? <div className="modal-footer error">Sync error: {syncError}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 const NoteNode = ({ data }) => {
   return (
     <div
@@ -173,10 +217,13 @@ function FlowCanvas() {
   const [edges, setEdges] = useState(initialEdges);
   const [lastSyncedNodes, setLastSyncedNodes] = useState(initialNodes);
   const [lastSyncedEdges, setLastSyncedEdges] = useState(initialEdges);
-  const [lastSyncedAt, setLastSyncedAt] = useState(new Date());
+  const [pendingChanges, setPendingChanges] = useState([]);
   const [stagedChangeIds, setStagedChangeIds] = useState([]);
-  const [syncVersion, setSyncVersion] = useState(1);
-  const lastSyncedVersion = useMemo(() => `v${syncVersion}`, [syncVersion]);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [lastSyncedVersion, setLastSyncedVersion] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+  const [generatedFiles, setGeneratedFiles] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? null);
   const [inspectorLabel, setInspectorLabel] = useState(initialNodes[0]?.data.label ?? '');
   const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
@@ -185,10 +232,10 @@ function FlowCanvas() {
   const seenChangeIdsRef = useRef(new Set());
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
-  const pendingChanges = useMemo(
-    () => computePendingChanges(nodes, edges, lastSyncedNodes, lastSyncedEdges),
-    [nodes, edges, lastSyncedNodes, lastSyncedEdges],
-  );
+  useEffect(() => {
+    const computed = computePendingChanges(nodes, edges, lastSyncedNodes, lastSyncedEdges);
+    setPendingChanges(computed);
+  }, [nodes, edges, lastSyncedNodes, lastSyncedEdges]);
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const nodesById = useMemo(() => {
@@ -462,56 +509,96 @@ function FlowCanvas() {
         });
       }
       setStagedChangeIds((prev) => prev.filter((id) => id !== changeId));
+      setPendingChanges((prev) => prev.filter((item) => item.id !== changeId));
     },
     [pendingChanges],
   );
 
-  const handleSync = useCallback(() => {
+  const handleSync = useCallback(async () => {
+    if (!stagedChangeIds.length) return;
+
     const stagedSet = new Set(stagedChangeIds);
-    if (!stagedSet.size && !pendingChanges.length) {
-      setLastSyncedAt(new Date());
-      setSyncVersion((prev) => prev + 1);
-      return;
+    const stagedChanges = pendingChanges.filter((change) => stagedSet.has(change.id));
+
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}${SYNC_ENDPOINT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodes,
+          edges,
+          changes: stagedChanges,
+          intent: 'sync',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sync failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data.files)) {
+        setGeneratedFiles(data.files);
+      } else {
+        setGeneratedFiles([]);
+      }
+
+      const now = new Date();
+      setLastSyncedAt(now);
+      setLastSyncedVersion((prev) => {
+        if (prev == null) return 1;
+        if (typeof prev === 'number') return prev + 1;
+        const parsed = Number(prev);
+        return Number.isFinite(parsed) ? parsed + 1 : prev;
+      });
+
+      setLastSyncedNodes((previousSynced) => {
+        const map = new Map(previousSynced.map((node) => [node.id, node]));
+        stagedChanges.forEach((change) => {
+          if (change.kind !== 'node') return;
+          if (change.changeType === 'added' && change.currentNode) {
+            map.set(change.nodeId, change.currentNode);
+          } else if (change.changeType === 'removed') {
+            map.delete(change.nodeId);
+          } else if (change.changeType === 'modified' && change.currentNode) {
+            map.set(change.nodeId, change.currentNode);
+          }
+        });
+        return Array.from(map.values());
+      });
+
+      setLastSyncedEdges((previousSynced) => {
+        const map = new Map(previousSynced.map((edge) => [edge.id, edge]));
+        stagedChanges.forEach((change) => {
+          if (change.kind !== 'edge') return;
+          if (change.changeType === 'added' && change.currentEdge) {
+            map.set(change.edgeId, change.currentEdge);
+          } else if (change.changeType === 'removed') {
+            map.delete(change.edgeId);
+          } else if (change.changeType === 'modified' && change.currentEdge) {
+            map.set(change.edgeId, change.currentEdge);
+          }
+        });
+        return Array.from(map.values());
+      });
+
+      setStagedChangeIds([]);
+    } catch (err) {
+      console.error('Sync error', err);
+      setSyncError(err.message || 'Sync failed');
+    } finally {
+      setIsSyncing(false);
     }
-
-    setLastSyncedNodes((previousSynced) => {
-      const map = new Map(previousSynced.map((node) => [node.id, node]));
-      pendingChanges.forEach((change) => {
-        if (!stagedSet.has(change.id) || change.kind !== 'node') return;
-        if (change.changeType === 'added' && change.currentNode) {
-          map.set(change.nodeId, change.currentNode);
-        } else if (change.changeType === 'removed') {
-          map.delete(change.nodeId);
-        } else if (change.changeType === 'modified' && change.currentNode) {
-          map.set(change.nodeId, change.currentNode);
-        }
-      });
-      return Array.from(map.values());
-    });
-
-    setLastSyncedEdges((previousSynced) => {
-      const map = new Map(previousSynced.map((edge) => [edge.id, edge]));
-      pendingChanges.forEach((change) => {
-        if (!stagedSet.has(change.id) || change.kind !== 'edge') return;
-        if (change.changeType === 'added' && change.currentEdge) {
-          map.set(change.edgeId, change.currentEdge);
-        } else if (change.changeType === 'removed') {
-          map.delete(change.edgeId);
-        } else if (change.changeType === 'modified' && change.currentEdge) {
-          map.set(change.edgeId, change.currentEdge);
-        }
-      });
-      return Array.from(map.values());
-    });
-
-    setLastSyncedAt(new Date());
-    setSyncVersion((prev) => prev + 1);
-    setStagedChangeIds([]);
-  }, [pendingChanges, stagedChangeIds]);
+  }, [edges, nodes, pendingChanges, stagedChangeIds]);
 
   const handleLabelChange = (event) => setInspectorLabel(event.target.value);
   const handleNotesChange = (event) => setInspectorNotes(event.target.value);
   const nodeTypes = { note: NoteNode };
+  const getNodeLabel = useCallback((id) => nodesById.get(id)?.data?.label ?? id, [nodesById]);
+  const versionLabel = lastSyncedVersion != null ? `v${lastSyncedVersion}` : 'Unsynced';
 
   return (
     <div className="app-shell">
@@ -519,8 +606,8 @@ function FlowCanvas() {
         <div className="brand">AI Node Generator</div>
         <div className="top-actions">
           <button className="ghost">New Project</button>
-          <button className="primary" onClick={handleSync} disabled={!stagedChangeIds.length}>
-            Sync
+          <button className="primary" onClick={handleSync} disabled={!stagedChangeIds.length || isSyncing}>
+            {isSyncing ? 'Syncing...' : 'Sync'}
           </button>
         </div>
       </header>
@@ -552,7 +639,7 @@ function FlowCanvas() {
           <div className="panel">
             <div className="panel-header">Versions</div>
             <ul className="list compact">
-              <li className="list-item">{lastSyncedVersion}</li>
+              <li className="list-item">{versionLabel}</li>
               <li className="list-item">v1.0</li>
               <li className="list-item">v0.9</li>
             </ul>
@@ -573,7 +660,6 @@ function FlowCanvas() {
               <div className="title">FPS Game</div>
             </div>
             <div className="canvas-actions">
-              <button className="ghost">Fit View</button>
               <button className="ghost">Export</button>
             </div>
           </div>
@@ -609,9 +695,10 @@ function FlowCanvas() {
             onUnstageAll={handleUnstageAll}
             onSync={handleSync}
             lastSyncedAt={lastSyncedAt}
-            lastSyncedVersion={lastSyncedVersion}
-            getNodeLabel={(id) => nodesById.get(id)?.data?.label ?? id}
+            lastSyncedVersion={lastSyncedVersion != null ? `v${lastSyncedVersion}` : null}
+            getNodeLabel={getNodeLabel}
           />
+          {syncError ? <div className="panel error">Sync error: {syncError}</div> : null}
           <div className="panel">
             <div className="panel-header">Node Inspector</div>
             {selectedNode ? (
@@ -643,10 +730,16 @@ function FlowCanvas() {
       </div>
 
       <footer className="status-bar">
-        <div>Status: Connected</div>
+        <div>Status: {isSyncing ? 'Syncing...' : 'Connected'}</div>
         <div>Nodes: {nodes.length} | Connections: {edges.length}</div>
         <div>Draft autosaved 2m ago</div>
       </footer>
+      <GeneratedFilesModal
+        files={generatedFiles}
+        onClose={() => setGeneratedFiles([])}
+        isSyncing={isSyncing}
+        syncError={syncError}
+      />
     </div>
   );
 }
