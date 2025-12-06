@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ENV files
+.env
+node-ai-backend/.env
+
+# Node modules everywhere
+node_modules/
+
+# Builds
+dist/
+build/

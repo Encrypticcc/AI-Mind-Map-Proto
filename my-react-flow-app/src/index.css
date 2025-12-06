@@ -256,6 +256,11 @@ input, textarea {
   border: 1px solid var(--border);
 }
 
+.react-flow__controls button:hover {
+  background: #d5d9e3;
+  color: #0a0f15;
+}
+
 /* Ensure node labels stay dark on light node backgrounds */
 .react-flow__node,
 .react-flow__node-default,
