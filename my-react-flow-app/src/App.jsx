@@ -20,6 +20,8 @@ const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
 const SYNC_ENDPOINT = '/api/generate-code'; // Switch to /api/generate-code when ready for real calls
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 520;
+const MIN_BOTTOM_HEIGHT = 60;
+const MAX_BOTTOM_HEIGHT_RATIO = 0.5;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -307,8 +309,9 @@ function FlowCanvas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(60);
   const seenChangeIdsRef = useRef(new Set());
-  const dragStateRef = useRef({ active: null, startX: 0, startWidth: 0 });
+  const dragStateRef = useRef({ active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
   useEffect(() => {
@@ -365,20 +368,29 @@ function FlowCanvas() {
 
   useEffect(() => {
     const handleMouseMove = (event) => {
-      const { active, startX, startWidth } = dragStateRef.current;
+      const { active, startX, startY, startWidth, startHeight } = dragStateRef.current;
       if (!active) return;
-      const delta = event.clientX - startX;
-      const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
-      if (active === 'left') {
-        setLeftSidebarWidth(nextWidth);
-      } else {
-        setRightSidebarWidth(nextWidth);
+      if (active === 'left' || active === 'right') {
+        const delta = event.clientX - startX;
+        const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+        if (active === 'left') {
+          setLeftSidebarWidth(nextWidth);
+        } else {
+          setRightSidebarWidth(nextWidth);
+        }
+        return;
+      }
+      if (active === 'bottom') {
+        const deltaY = startY - event.clientY;
+        const maxHeight = Math.max(MIN_BOTTOM_HEIGHT, window.innerHeight * MAX_BOTTOM_HEIGHT_RATIO);
+        const nextHeight = clamp(startHeight + deltaY, MIN_BOTTOM_HEIGHT, maxHeight);
+        setBottomPanelHeight(nextHeight);
       }
     };
 
     const handleMouseUp = () => {
       if (!dragStateRef.current.active) return;
-      dragStateRef.current = { active: null, startX: 0, startWidth: 0 };
+      dragStateRef.current = { active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 };
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
@@ -711,12 +723,30 @@ function FlowCanvas() {
   const startResize = useCallback(
     (side, event) => {
       event.preventDefault();
+      if (side === 'bottom') {
+        dragStateRef.current = {
+          active: side,
+          startX: event.clientX,
+          startY: event.clientY,
+          startWidth: 0,
+          startHeight: bottomPanelHeight,
+        };
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'row-resize';
+        return;
+      }
       const initialWidth = side === 'left' ? leftSidebarWidth : rightSidebarWidth;
-      dragStateRef.current = { active: side, startX: event.clientX, startWidth: initialWidth };
+      dragStateRef.current = {
+        active: side,
+        startX: event.clientX,
+        startY: event.clientY,
+        startWidth: initialWidth,
+        startHeight: 0,
+      };
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'col-resize';
     },
-    [leftSidebarWidth, rightSidebarWidth],
+    [bottomPanelHeight, leftSidebarWidth, rightSidebarWidth],
   );
 
   return (
@@ -864,18 +894,34 @@ function FlowCanvas() {
         </aside>
       </div>
 
-      <footer className="status-bar">
-        <div>Status: {isSyncing ? 'Syncing...' : 'Connected'}</div>
-        <div>Nodes: {nodes.length} | Connections: {edges.length}</div>
-        <div>Draft autosaved 2m ago</div>
-        <div>© 2025 Encryptic. Proprietary technology. Not for redistribution.</div>
-      </footer>
-      <GeneratedFilesModal
-        files={generatedFiles}
-        onClose={() => setGeneratedFiles([])}
-        isSyncing={isSyncing}
-        syncError={syncError}
-      />
+      <div
+        className="bottom-panel"
+        style={{
+          height: bottomPanelHeight,
+          minHeight: MIN_BOTTOM_HEIGHT,
+          maxHeight: `${MAX_BOTTOM_HEIGHT_RATIO * 100}vh`,
+        }}
+      >
+        <div
+          className="resize-handle vertical"
+          role="separator"
+          aria-label="Resize bottom panel"
+          aria-orientation="horizontal"
+          onMouseDown={(event) => startResize('bottom', event)}
+        />
+        <footer className="status-bar">
+          <div>Status: {isSyncing ? 'Syncing...' : 'Connected'}</div>
+          <div>Nodes: {nodes.length} | Connections: {edges.length}</div>
+          <div>Draft autosaved 2m ago</div>
+          <div>© 2025 Encryptic. Proprietary technology. Not for redistribution.</div>
+        </footer>
+        <GeneratedFilesModal
+          files={generatedFiles}
+          onClose={() => setGeneratedFiles([])}
+          isSyncing={isSyncing}
+          syncError={syncError}
+        />
+      </div>
     </div>
   );
 }
