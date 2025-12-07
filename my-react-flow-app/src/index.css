@@ -348,23 +348,118 @@ button:active {
   background: rgba(12, 14, 18, 0.9);
   border-top: 1px solid var(--border);
   box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.4);
+  position: relative;
 
-  /* Prevent horizontal page expansion */
+  /* Prevent page-level scrolling from this container */
+  overflow: hidden;
+
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.bottom-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(18, 20, 28, 0.95);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.bottom-panel-title {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bottom-panel .modal-backdrop {
+  flex: 1 1 auto;
+  overflow-y: auto;
   overflow-x: hidden;
 }
 
 .bottom-panel .modal {
-  /* Allow vertical scrolling */
-  overflow-y: auto;
-
-  /* Prevent horizontal scrolling/stretching */
-  overflow-x: hidden;
+  display: block;
+  max-height: 100%;
+  overflow: auto;
 
   /* Ensure long lines wrap instead of forcing width expansion */
   white-space: normal;
   word-break: break-word;
   max-width: 100%;
 }
+
+.status-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* spreads content across the bar */
+  gap: 16px;
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(15, 12, 18, 0.9);
+  color: var(--muted);
+  font-size: 13px;
+  width: 100%;          /* fills the whole bottom-panel width */
+  white-space: nowrap;  /* keep it on one line */
+}
+
+.status-bar {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-body {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 12px 16px;
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.icon-button {
+  background: var(--ghost);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  background: rgba(124, 240, 200, 0.08);
+}
+
+.icon-button img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.bottom-panel-close {
+  position: static;
+}
+
 
 .list {
   color: var(--text);

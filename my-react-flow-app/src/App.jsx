@@ -15,14 +15,16 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VersionControlPanel from './VersionControlPanel.jsx';
 import { nodeImplementations } from './nodes/nodeImplementations.js';
+import binIcon from './assets/bin.png';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
-const SYNC_ENDPOINT = '/api/generate-code'; // Switch to /api/generate-code when ready for real calls
+const SYNC_ENDPOINT = '/api/generate-code-fake'; // Switch to /api/generate-code when ready for real calls or /api/generate-code-fake for testing
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 520;
-const MIN_BOTTOM_HEIGHT = 60;
+const MIN_BOTTOM_HEIGHT = 30;
 const MAX_BOTTOM_HEIGHT_RATIO = 0.5;
+const EXPANDED_BOTTOM_HEIGHT = 200;
 const NODE_TYPE_OPTIONS = ['note', 'default', 'input', 'output', 'modifier'];
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -162,16 +164,6 @@ function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <div className="modal-header">
-          <h2>Generated files, Control + Left Click to download.</h2>
-          <div className="modal-actions">
-            {isSyncing ? <span className="tag">Syncing...</span> : null}
-            {syncError ? <span className="tag danger">Error</span> : null}
-            <button type="button" className="ghost" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </div>
         <div className="modal-body">
           <div className="file-list">
             {files.map((file, index) => (
@@ -293,99 +285,222 @@ const initialEdges = [
 
 const exampleTemplates = [
   {
-    id: 'python-calculator',
-    title: 'Python CLI calculator',
-    summary: 'Parse a text request, validate numbers, then emit a tiny Python script to run the math.',
+    id: 'js-click-counter',
+    title: 'Button click counter',
+    summary: 'Make a simple web page where a button counts how many times it was clicked.',
     nodes: [
-      { id: 'prompt', label: 'User prompt', notes: 'Sample: "calculate 8 * 4 - 2" with natural language intent.', position: { x: 0, y: 0 } },
-      { id: 'parse-intent', label: 'Parse intent', notes: 'Extract operands and operator tokens. Default to addition if unclear.', position: { x: 260, y: 0 } },
-      { id: 'validate', label: 'Validate numbers', notes: 'Confirm both operands are numeric and operator is in [+ - * /].', position: { x: 520, y: 0 } },
-      { id: 'operation', label: 'Build operation', notes: 'Compose the expression string like "result = a * b".', position: { x: 780, y: 0 } },
-      { id: 'script', label: 'Emit Python snippet', notes: 'Wrap expression into a CLI-ready script with argparse + print.', position: { x: 1040, y: 0 } },
+      {
+        id: 'idea',
+        label: 'What it should do',
+        notes: 'User clicks a button and sees the number go up.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'layout',
+        label: 'Build the layout',
+        notes: 'Add a heading, a button, and a text area that shows the count.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'state',
+        label: 'Store the count',
+        notes: 'Start with count = 0 in JavaScript.',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'logic',
+        label: 'Click logic',
+        notes: 'When the button is clicked, increase the count and update the text.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'export',
+        label: 'Export page',
+        notes: 'Output a single HTML file that runs in any browser.',
+        position: { x: 1040, y: 0 },
+      },
     ],
     edges: [
-      { source: 'prompt', target: 'parse-intent' },
-      { source: 'parse-intent', target: 'validate' },
-      { source: 'validate', target: 'operation' },
-      { source: 'operation', target: 'script' },
+      { source: 'idea', target: 'layout' },
+      { source: 'layout', target: 'state' },
+      { source: 'state', target: 'logic' },
+      { source: 'logic', target: 'export' },
     ],
   },
+
   {
-    id: 'rest-json',
-    title: 'REST fetch + filter',
-    summary: 'Hit an API, parse JSON, and keep only the useful fields.',
+    id: 'todo-list',
+    title: 'Simple to-do list',
+    summary: 'Create a basic to-do list where users can add and remove tasks.',
     nodes: [
-      { id: 'url', label: 'API endpoint', notes: 'Example: GET https://api.example.com/users?limit=20', position: { x: 0, y: 0 } },
-      { id: 'headers', label: 'Headers/auth', notes: 'Add Authorization + User-Agent headers.', position: { x: 260, y: 0 } },
-      { id: 'fetch', label: 'HTTP request', notes: 'Perform fetch with retries and timeout.', position: { x: 520, y: 0 } },
-      { id: 'parse', label: 'Parse JSON', notes: 'Validate JSON body; surface schema errors early.', position: { x: 780, y: 0 } },
-      { id: 'filter', label: 'Filter fields', notes: 'Map records to id, email, createdAt only.', position: { x: 1040, y: 0 } },
-      { id: 'output', label: 'Return list', notes: 'Emit cleaned array for downstream nodes.', position: { x: 1300, y: 0 } },
+      {
+        id: 'goal',
+        label: 'Define goal',
+        notes: 'User can type a task, add it to a list, and delete it later.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'inputs',
+        label: 'Add input + button',
+        notes: 'Text input for the task and an "Add" button.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'list-ui',
+        label: 'Task list UI',
+        notes: 'Show tasks in a simple vertical list.',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'add-logic',
+        label: 'Add task logic',
+        notes: 'When user clicks "Add", push the task into an array and re-render the list.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'remove-logic',
+        label: 'Remove task logic',
+        notes: 'Each task has a small "x" button to delete it from the array.',
+        position: { x: 1040, y: 0 },
+      },
     ],
     edges: [
-      { source: 'url', target: 'headers' },
-      { source: 'headers', target: 'fetch' },
-      { source: 'fetch', target: 'parse' },
-      { source: 'parse', target: 'filter' },
-      { source: 'filter', target: 'output' },
+      { source: 'goal', target: 'inputs' },
+      { source: 'inputs', target: 'list-ui' },
+      { source: 'list-ui', target: 'add-logic' },
+      { source: 'add-logic', target: 'remove-logic' },
     ],
   },
+
   {
-    id: 'csv-cleaner',
-    title: 'CSV cleaner to SQL',
-    summary: 'Load a CSV, normalize rows, and prep a SQL INSERT batch.',
+    id: 'contact-form-api',
+    title: 'Contact form handler',
+    summary: 'Take a simple contact form and send the message to a backend endpoint.',
     nodes: [
-      { id: 'csv-path', label: 'CSV source', notes: 'Path + delimiter; expect headers row.', position: { x: 0, y: 0 } },
-      { id: 'schema', label: 'Infer schema', notes: 'Detect column types and required fields.', position: { x: 260, y: 0 } },
-      { id: 'clean', label: 'Clean rows', notes: 'Trim strings, coerce dates, drop empty rows.', position: { x: 520, y: 0 } },
-      { id: 'validate-rows', label: 'Validate rows', notes: 'Reject rows missing primary keys; log reasons.', position: { x: 780, y: 0 } },
-      { id: 'sql', label: 'Build SQL', notes: 'Generate INSERT statements with placeholders.', position: { x: 1040, y: 0 } },
-      { id: 'preview', label: 'Preview batch', notes: 'Show first 5 INSERTS for verification.', position: { x: 1300, y: 0 } },
+      {
+        id: 'form-ui',
+        label: 'Design form',
+        notes: 'Fields: name, email, message, and a Send button.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'validate-form',
+        label: 'Validate input',
+        notes: 'Check required fields, basic email format, and message length.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'send-request',
+        label: 'Send to API',
+        notes: 'POST JSON to /contact with the form data.',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'handle-response',
+        label: 'Handle response',
+        notes: 'If success, show a thank-you message; if error, show a friendly error.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'save-server',
+        label: 'Server action',
+        notes: 'On the backend, log or email the message.',
+        position: { x: 1040, y: 0 },
+      },
     ],
     edges: [
-      { source: 'csv-path', target: 'schema' },
-      { source: 'schema', target: 'clean' },
-      { source: 'clean', target: 'validate-rows' },
-      { source: 'validate-rows', target: 'sql' },
-      { source: 'sql', target: 'preview' },
+      { source: 'form-ui', target: 'validate-form' },
+      { source: 'validate-form', target: 'send-request' },
+      { source: 'send-request', target: 'handle-response' },
+      { source: 'send-request', target: 'save-server' },
     ],
   },
+
   {
-    id: 'summarizer',
-    title: 'LLM summarizer',
-    summary: 'Chunk text, summarize each part, then stitch a final concise brief.',
+    id: 'note-summarizer',
+    title: 'Short note summarizer',
+    summary: 'Paste a long note and get a short, clear summary.',
     nodes: [
-      { id: 'ingest', label: 'Ingest text', notes: 'Upload transcript or paste paragraphs.', position: { x: 0, y: 0 } },
-      { id: 'chunk', label: 'Chunk content', notes: 'Split into ~800 token slices with overlap.', position: { x: 260, y: 0 } },
-      { id: 'per-chunk', label: 'Summarize chunk', notes: 'LLM prompt with bullet output + key quotes.', position: { x: 520, y: 0 } },
-      { id: 'merge', label: 'Merge summaries', notes: 'Combine bullets; dedupe repeating facts.', position: { x: 780, y: 0 } },
-      { id: 'tone', label: 'Apply tone', notes: 'Rewrite into executive brief at 120 words.', position: { x: 1040, y: 0 } },
+      {
+        id: 'input',
+        label: 'Paste text',
+        notes: 'User pastes a long note, email, or document.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'clean-text',
+        label: 'Clean text',
+        notes: 'Strip extra spaces and very long repeated lines.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'call-llm',
+        label: 'Ask the LLM',
+        notes: 'Send the cleaned text with a prompt like: "Summarize in 3 bullet points."',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'format-output',
+        label: 'Format answer',
+        notes: 'Return neat bullets with the key points only.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'show-result',
+        label: 'Show summary',
+        notes: 'Display the summary below the input, ready to copy.',
+        position: { x: 1040, y: 0 },
+      },
     ],
     edges: [
-      { source: 'ingest', target: 'chunk' },
-      { source: 'chunk', target: 'per-chunk' },
-      { source: 'per-chunk', target: 'merge' },
-      { source: 'merge', target: 'tone' },
+      { source: 'input', target: 'clean-text' },
+      { source: 'clean-text', target: 'call-llm' },
+      { source: 'call-llm', target: 'format-output' },
+      { source: 'format-output', target: 'show-result' },
     ],
   },
+
   {
-    id: 'image-pipeline',
-    title: 'Image resize + alt text',
-    summary: 'Optimize an image, keep variants, and auto-write accessibility alt text.',
+    id: 'image-resize',
+    title: 'Simple image resizer',
+    summary: 'Upload one image and get a smaller version for the web.',
     nodes: [
-      { id: 'upload', label: 'Upload image', notes: 'Accept PNG/JPG up to 5MB.', position: { x: 0, y: 0 } },
-      { id: 'analyze', label: 'Analyze content', notes: 'Detect subject, colors, and any text.', position: { x: 260, y: 0 } },
-      { id: 'resize', label: 'Generate sizes', notes: 'Create 512px thumb and 1080px hero with quality=80.', position: { x: 520, y: 0 } },
-      { id: 'compress', label: 'Compress', notes: 'Strip metadata; ensure under 400KB when possible.', position: { x: 780, y: 0 } },
-      { id: 'alt-text', label: 'Write alt text', notes: 'Use analysis to propose an accessible alt string.', position: { x: 1040, y: 0 } },
-      { id: 'deliver', label: 'Return assets', notes: 'Return URLs plus alt text as JSON.', position: { x: 1300, y: 0 } },
+      {
+        id: 'pick-image',
+        label: 'Choose image',
+        notes: 'User uploads a PNG or JPG.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'check-size',
+        label: 'Check file size',
+        notes: 'If the image is too large (e.g. > 5MB), show a warning.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'resize-image',
+        label: 'Resize',
+        notes: 'Scale the image down to a max width, e.g. 1200px.',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'optimize',
+        label: 'Optimize',
+        notes: 'Light compression so it loads faster on websites.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'download',
+        label: 'Download result',
+        notes: 'Return the new image for the user to save.',
+        position: { x: 1040, y: 0 },
+      },
     ],
     edges: [
-      { source: 'upload', target: 'analyze' },
-      { source: 'analyze', target: 'resize' },
-      { source: 'resize', target: 'compress' },
-      { source: 'compress', target: 'alt-text' },
-      { source: 'alt-text', target: 'deliver' },
+      { source: 'pick-image', target: 'check-size' },
+      { source: 'check-size', target: 'resize-image' },
+      { source: 'resize-image', target: 'optimize' },
+      { source: 'optimize', target: 'download' },
     ],
   },
 ];
@@ -445,7 +560,8 @@ function FlowCanvas() {
   const [searchTerm, setSearchTerm] = useState('');
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(60);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(30);
+  const [isBottomDragging, setIsBottomDragging] = useState(false);
   const seenChangeIdsRef = useRef(new Set());
   const dragStateRef = useRef({ active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
   const { screenToFlowPosition, setCenter } = useReactFlow();
@@ -537,6 +653,7 @@ function FlowCanvas() {
 
     const handleMouseUp = () => {
       if (!dragStateRef.current.active) return;
+      setIsBottomDragging(false);
       dragStateRef.current = { active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 };
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
@@ -745,6 +862,11 @@ function FlowCanvas() {
     setStagedChangeIds([]);
   }, []);
 
+  const animateBottomPanelHeight = useCallback((height) => {
+    setIsBottomDragging(false);
+    setBottomPanelHeight(height);
+  }, []);
+
   const handleRevertChange = useCallback(
     (changeId) => {
       const change = pendingChanges.find((item) => item.id === changeId);
@@ -816,6 +938,7 @@ function FlowCanvas() {
       } else {
         setGeneratedFiles([]);
       }
+      animateBottomPanelHeight(EXPANDED_BOTTOM_HEIGHT);
 
       const now = new Date();
       setLastSyncedAt(now);
@@ -863,7 +986,7 @@ function FlowCanvas() {
     } finally {
       setIsSyncing(false);
     }
-  }, [edges, nodes, pendingChanges, stagedChangeIds]);
+  }, [animateBottomPanelHeight, edges, nodes, pendingChanges, stagedChangeIds]);
 
   const handleLabelChange = (event) => setInspectorLabel(event.target.value);
   const handleNotesChange = (event) => setInspectorNotes(event.target.value);
@@ -899,6 +1022,7 @@ function FlowCanvas() {
     (side, event) => {
       event.preventDefault();
       if (side === 'bottom') {
+        setIsBottomDragging(true);
         dragStateRef.current = {
           active: side,
           startX: event.clientX,
@@ -1109,6 +1233,7 @@ function FlowCanvas() {
           height: bottomPanelHeight,
           minHeight: MIN_BOTTOM_HEIGHT,
           maxHeight: `${MAX_BOTTOM_HEIGHT_RATIO * 100}vh`,
+          transition: isBottomDragging ? 'none' : 'height 0.5s ease',
         }}
       >
         <div
@@ -1124,9 +1249,28 @@ function FlowCanvas() {
           <div>Draft autosaved 2m ago</div>
           <div>© 2025 Encryptic. Proprietary technology. Not for redistribution.</div>
         </footer>
+        <div className="bottom-panel-header">
+          <div className="bottom-panel-title">Generated Output — Ctrl + Click to download on a file to download.</div>
+          {generatedFiles?.length ? (
+            <button
+              type="button"
+              className="icon-button bottom-panel-close"
+              onClick={() => {
+                setGeneratedFiles([]);
+                animateBottomPanelHeight(MIN_BOTTOM_HEIGHT);
+              }}
+              aria-label="Close"
+            >
+              <img src={binIcon} alt="Close" />
+            </button>
+          ) : null}
+        </div>
         <GeneratedFilesModal
           files={generatedFiles}
-          onClose={() => setGeneratedFiles([])}
+          onClose={() => {
+            setGeneratedFiles([]);
+            animateBottomPanelHeight(MIN_BOTTOM_HEIGHT);
+          }}
           isSyncing={isSyncing}
           syncError={syncError}
         />
