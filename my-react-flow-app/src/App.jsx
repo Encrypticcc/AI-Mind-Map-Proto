@@ -14,6 +14,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VersionControlPanel from './VersionControlPanel.jsx';
+import { nodeImplementations } from './nodes/nodeImplementations.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
@@ -313,11 +314,20 @@ function FlowCanvas() {
   const seenChangeIdsRef = useRef(new Set());
   const dragStateRef = useRef({ active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
   const { screenToFlowPosition, setCenter } = useReactFlow();
+  const nodeImplementationMap = useMemo(() => nodeImplementations, []);
+  const getNodeImplementation = useCallback((nodeId) => nodeImplementationMap[nodeId], [nodeImplementationMap]);
 
   useEffect(() => {
     const computed = computePendingChanges(nodes, edges, lastSyncedNodes, lastSyncedEdges);
     setPendingChanges(computed);
   }, [nodes, edges, lastSyncedNodes, lastSyncedEdges]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__nodeImplementations = nodeImplementationMap;
+      window.__resolveNodeImplementation = getNodeImplementation;
+    }
+  }, [getNodeImplementation, nodeImplementationMap]);
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const nodesById = useMemo(() => {
