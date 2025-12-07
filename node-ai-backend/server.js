@@ -104,6 +104,7 @@ function computeModifierTargets(nodes, edges) {
     // treat nodes explicitly tagged as modifiers OR whose label mentions "comment" / "modifier" as modifiers.
     const label = (node.data?.label || "").toLowerCase();
     const isModifier =
+      node.type === "modifier" ||
       node.data?.kind === "modifier" ||
       label.includes("add a comment") ||
       label.includes("modifier");

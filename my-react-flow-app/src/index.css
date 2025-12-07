@@ -180,6 +180,43 @@ body,
   gap: 10px;
 }
 
+.example-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.example-card {
+  background: var(--ghost);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.example-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.example-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.example-summary {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.example-preview {
+  color: var(--accent);
+  font-size: 12px;
+}
+
 .inspector {
   display: grid;
   gap: 10px;
@@ -193,7 +230,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   background: var(--ghost);
   color: var(--text);
@@ -433,6 +471,31 @@ input, textarea {
 .note-body .note-notes {
   margin: 0;
   padding: 0;
+}
+
+.note-node.node-note .note-header::before {
+  background: #4be6a5;
+  box-shadow: 0 0 8px rgba(75, 230, 165, 0.9);
+}
+
+.note-node.node-default .note-header::before {
+  background: #5fb4ff;
+  box-shadow: 0 0 8px rgba(95, 180, 255, 0.85);
+}
+
+.note-node.node-input .note-header::before {
+  background: #ffb347;
+  box-shadow: 0 0 8px rgba(255, 179, 71, 0.9);
+}
+
+.note-node.node-output .note-header::before {
+  background: #c084fc;
+  box-shadow: 0 0 8px rgba(192, 132, 252, 0.9);
+}
+
+.note-node.node-modifier .note-header::before {
+  background: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.9);
 }
 
 .hierarchy-search {
