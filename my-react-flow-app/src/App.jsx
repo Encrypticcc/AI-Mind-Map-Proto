@@ -17,7 +17,11 @@ import VersionControlPanel from './VersionControlPanel.jsx';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
-const SYNC_ENDPOINT = '/api/generate-code-fake'; // Switch to /api/generate-code when ready for real calls
+const SYNC_ENDPOINT = '/api/generate-code'; // Switch to /api/generate-code when ready for real calls
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 520;
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const shallowEqualObjects = (a = {}, b = {}) => {
   const aKeys = Object.keys(a);
@@ -134,6 +138,20 @@ function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
 
   if (!files || !files.length) return null;
 
+  const downloadFile = (file) => {
+    if (!file) return;
+    const blob = new Blob([file.contents ?? ''], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const parts = (file.path || 'file.txt').split(/[/\\]/);
+    link.download = parts[parts.length - 1] || 'file.txt';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const safeIndex = selectedIndex < files.length ? selectedIndex : 0;
   const selected = files[safeIndex] || files[0];
 
@@ -141,7 +159,7 @@ function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
     <div className="modal-backdrop">
       <div className="modal">
         <div className="modal-header">
-          <h2>Generated files</h2>
+          <h2>Generated files, Control + Left Click to download.</h2>
           <div className="modal-actions">
             {isSyncing ? <span className="tag">Syncing...</span> : null}
             {syncError ? <span className="tag danger">Error</span> : null}
@@ -157,7 +175,14 @@ function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
                 key={file.path}
                 type="button"
                 className={`file-tab ${index === safeIndex ? 'active' : ''}`}
-                onClick={() => setSelectedIndex(index)}
+                onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey) {
+                    event.preventDefault();
+                    downloadFile(file);
+                    return;
+                  }
+                  setSelectedIndex(index);
+                }}
               >
                 {file.path}
               </button>
@@ -180,8 +205,14 @@ const NoteNode = ({ data }) => {
       }}
     >
       <Handle type="target" position={Position.Top} />
-      <div className="note-title">{data.label}</div>
-      {data.notes ? <div className="note-notes">{data.notes}</div> : null}
+      <div className="note-header">
+        <div className="note-title">{data.label}</div>
+      </div>
+      {data.notes ? (
+        <div className="note-body">
+          <div className="note-notes">{data.notes}</div>
+        </div>
+      ) : null}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -189,28 +220,73 @@ const NoteNode = ({ data }) => {
 
 const initialNodes = [
   {
-    id: 'n1',
+    id: 'controls-template',
     type: 'note',
     position: { x: 0, y: 0 },
-    data: { label: 'Node 1', notes: 'Key milestone' },
+    data: {
+      label: 'Getting started',
+      notes: [
+        '• Right-click on the canvas to create a node',
+        '• Drag from the small circle to connect nodes',
+        '• Scroll to zoom, drag canvas to pan',
+        '• Click a node to edit or inspect it',
+        '• Press Delete/Backspace to remove a node/connection'
+      ].join('\n')
+    },
     style: { ...DEFAULT_NODE_STYLE },
   },
+
   {
-    id: 'n2',
+    id: 'hierarchy-guide',
     type: 'note',
-    position: { x: 180, y: 140 },
-    data: { label: 'Node 2', notes: 'Follow-up task' },
+    position: { x: 350, y: 0 }, // between controls + version control
+    data: {
+      label: 'Using the Hierarchy',
+      notes: [
+        '• The Hierarchy lists all nodes in the current canvas',
+        '• Click a node in the Hierarchy to select and focus it on the canvas',
+        '• Selecting a node on the canvas also highlights it in the Hierarchy',
+        '• Use the + button to expand and show related/child nodes',
+        '• Use the – button to collapse a group back to a single entry',
+        '• Use the search bar to quickly find a node by name'
+      ].join('\n')
+    },
     style: { ...DEFAULT_NODE_STYLE },
   },
+
   {
-    id: 'n3',
+    id: 'version-control-guide',
     type: 'note',
-    position: { x: -180, y: 140 },
-    data: { label: 'Node 3', notes: 'Follow-up task' },
+    position: { x: 700, y: 0 },
+    data: {
+      label: 'Using Version Control',
+      notes: [
+        '• Each edit appears in the Version Control panel',
+        '• Click a change to stage it — only staged changes will sync',
+        '• Use “Stage all” to quickly stage everything',
+        '• Use “Revert” to undo a specific change',
+        '• Press Sync to generate/update code from staged changes',
+        '• After syncing, changes are saved into a new version'
+      ].join('\n')
+    },
     style: { ...DEFAULT_NODE_STYLE },
   },
 ];
-const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
+
+const initialEdges = [
+  {
+    id: 'controls-to-hierarchy',
+    source: 'controls-template',
+    target: 'hierarchy-guide',
+  },
+  {
+    id: 'hierarchy-to-vc',
+    source: 'hierarchy-guide',
+    target: 'version-control-guide',
+  },
+];
+
+
 
 function FlowCanvas() {
   const [nodes, setNodes] = useState(initialNodes);
@@ -229,7 +305,10 @@ function FlowCanvas() {
   const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
   const seenChangeIdsRef = useRef(new Set());
+  const dragStateRef = useRef({ active: null, startX: 0, startWidth: 0 });
   const { screenToFlowPosition, setCenter } = useReactFlow();
 
   useEffect(() => {
@@ -283,6 +362,36 @@ function FlowCanvas() {
     });
     seenChangeIdsRef.current = new Set(pendingIds);
   }, [pendingChanges]);
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      const { active, startX, startWidth } = dragStateRef.current;
+      if (!active) return;
+      const delta = event.clientX - startX;
+      const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+      if (active === 'left') {
+        setLeftSidebarWidth(nextWidth);
+      } else {
+        setRightSidebarWidth(nextWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (!dragStateRef.current.active) return;
+      dragStateRef.current = { active: null, startX: 0, startWidth: 0 };
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, []);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
@@ -599,6 +708,16 @@ function FlowCanvas() {
   const nodeTypes = { note: NoteNode };
   const getNodeLabel = useCallback((id) => nodesById.get(id)?.data?.label ?? id, [nodesById]);
   const versionLabel = lastSyncedVersion != null ? `v${lastSyncedVersion}` : 'Unsynced';
+  const startResize = useCallback(
+    (side, event) => {
+      event.preventDefault();
+      const initialWidth = side === 'left' ? leftSidebarWidth : rightSidebarWidth;
+      dragStateRef.current = { active: side, startX: event.clientX, startWidth: initialWidth };
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    },
+    [leftSidebarWidth, rightSidebarWidth],
+  );
 
   return (
     <div className="app-shell">
@@ -613,7 +732,7 @@ function FlowCanvas() {
       </header>
 
       <div className="main">
-        <aside className="sidebar left">
+        <aside className="sidebar left" style={{ width: leftSidebarWidth, minWidth: MIN_SIDEBAR_WIDTH }}>
           <div className="panel">
             <div className="panel-header">Projects</div>
             <ul className="list">
@@ -653,7 +772,15 @@ function FlowCanvas() {
           </div>
         </aside>
 
-        <section className="canvas-area">
+        <div
+          className="resize-handle"
+          role="separator"
+          aria-label="Resize left sidebar"
+          aria-orientation="vertical"
+          onMouseDown={(event) => startResize('left', event)}
+        />
+
+        <section className="canvas-area" style={{ flex: 1, minWidth: 0 }}>
           <div className="canvas-header">
             <div>
               <div className="eyebrow">Current canvas</div>
@@ -685,7 +812,15 @@ function FlowCanvas() {
           </div>
         </section>
 
-        <aside className="sidebar right">
+        <div
+          className="resize-handle"
+          role="separator"
+          aria-label="Resize right sidebar"
+          aria-orientation="vertical"
+          onMouseDown={(event) => startResize('right', event)}
+        />
+
+        <aside className="sidebar right" style={{ width: rightSidebarWidth, minWidth: MIN_SIDEBAR_WIDTH }}>
           <VersionControlPanel
             pendingChanges={pendingChanges}
             stagedChangeIds={stagedChangeIds}
@@ -733,6 +868,7 @@ function FlowCanvas() {
         <div>Status: {isSyncing ? 'Syncing...' : 'Connected'}</div>
         <div>Nodes: {nodes.length} | Connections: {edges.length}</div>
         <div>Draft autosaved 2m ago</div>
+        <div>© 2025 Encryptic. Proprietary technology. Not for redistribution.</div>
       </footer>
       <GeneratedFilesModal
         files={generatedFiles}
