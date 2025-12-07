@@ -17,17 +17,17 @@ The request body contains:
 - edges: directed connections between nodes.
 - changes: only the staged changes since the last sync.
 - intent: currently "sync".
+- modifierTargets (optional): an object whose keys are modifier node ids and whose values are arrays of node ids that modifier is allowed to change.
 
 Each node participates in the implementation and may represent:
 - a unit of behaviour (e.g. "A simple plus calculator"),
 - a high-level instruction (e.g. "Generate this is python"),
-- or a modifier of other nodes (e.g. "Add a comment at the top", "Make this async").
+- or a modifier of other nodes (e.g. "Add a comment at the top").
 
 CODE MAPPING
 ------------
 
-For each node that participates in the implementation, you must generate or update code
-wrapped in markers of the form:
+For each node that participates in the implementation, you must generate or update code wrapped in markers of the form:
 
 // <NODE:{nodeId}:START>
 ... implementation ...
@@ -35,50 +35,48 @@ wrapped in markers of the form:
 
 These markers must be stable across syncs so that specific node regions can be updated later.
 
-Use the full graph (nodes + edges) for context, but treat "changes" as the primary driver
-for what to modify. For added nodes, create new marker blocks. For modified nodes, update
-only their marker blocks and minimal glue code. For deleted nodes, remove or disable their
-marker blocks and any direct references that would break the build.
+Use the full graph (nodes + edges) for context, but treat "changes" as the primary driver for what to modify. For added nodes, create new marker blocks. For modified nodes, update only their marker blocks and minimal glue code. For deleted nodes, remove or disable their marker blocks and any direct references that would break the build.
 
-MODIFIER NODES AND EDGE SCOPING
+MODIFIER NODES AND HARD SCOPING
 -------------------------------
 
 Some nodes act like modifiers, for example:
 - "Add a comment at the top"
 - "Only apply to the connected node above"
 - "Make this async"
-- "Add logging to this function"
+- "Add logging"
 
-IMPORTANT RULE:
+The request may include a "modifierTargets" object like:
 
-A modifier node may ONLY affect the nodes it is explicitly connected to by outgoing edges.
+{
+  "modifier-node-id": ["target-node-id-1", "target-node-id-2"],
+  ...
+}
 
-- If a modifier node M has an edge from M -> A, then M may only change the code associated
-  with node A (and any files/functions that directly implement node A).
-- If M is NOT connected to node B by an edge, M MUST NOT change node B's code, even if B:
-  - is a sibling of A,
-  - shares the same parent as A,
-  - or has a very similar description.
+This defines, explicitly, which node ids each modifier is allowed to affect.
+
+HARD RULE (must be strictly followed):
+
+- A modifier may ONLY change code for node ids listed in modifierTargets[modifierId].
+- If a node id is not listed as a target for a modifier, that modifier MUST NOT change that node's code or any file/function that implements it.
+- Do NOT infer extra targets based on similarity, shared parents, or helpfulness. Ignore intuition: follow modifierTargets exactly.
+- If modifierTargets is missing or a modifier id has no entry, assume that modifier has no allowed targets and must not change anything.
 
 Example:
 
-- Node "Generate this is python" is a parent instruction node.
-- Child nodes:
-    - "A simple plus calculator" (node id: plus-calculator)
-    - "A simple times calculator" (node id: times-calculator)
-- Modifier node:
-    - "Add a comment at the top" connected ONLY to "A simple plus calculator".
+- Nodes:
+    - "A simple plus calculator" (id: plus-calculator)
+    - "A simple times calculator" (id: times-calculator)
+- Modifier:
+    - "Add a comment at the top" (id: comment-modifier)
+- modifierTargets:
+    {
+      "comment-modifier": ["plus-calculator"]
+    }
 
 Result:
-- Only the code for "A simple plus calculator" is changed by the modifier (e.g. adding a
-  comment at the top of its file or function).
-- The code for "A simple times calculator" must remain unchanged apart from its own node
-  description. The modifier MUST NOT touch it.
-
-Always use edges to determine scope:
-- A modifier’s effect is limited to its explicit outgoing connections.
-- Do not "helpfully" apply modifiers to other nodes that merely look similar or share a
-  parent.
+- Only the code for "plus-calculator" is changed by the modifier (e.g. adding a comment at the top of its file or function).
+- The code for "times-calculator" MUST remain untouched apart from its own node description.
 
 OUTPUT FORMAT
 -------------
@@ -96,6 +94,31 @@ Rules:
 - Do NOT include any extra top-level keys or prose in the response.
 - The response must be valid JSON (no markdown fences, comments, or trailing commas).
 `;
+
+function computeModifierTargets(nodes, edges) {
+  const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const targets = {};
+
+  for (const node of nodes) {
+    // Simple heuristic for now:
+    // treat nodes explicitly tagged as modifiers OR whose label mentions "comment" / "modifier" as modifiers.
+    const label = (node.data?.label || "").toLowerCase();
+    const isModifier =
+      node.data?.kind === "modifier" ||
+      label.includes("add a comment") ||
+      label.includes("modifier");
+
+    if (!isModifier) continue;
+
+    const modifierId = node.id;
+    targets[modifierId] = edges
+      .filter((edge) => edge.source === modifierId)
+      .map((edge) => edge.target)
+      .filter((targetId) => Boolean(nodeMap[targetId]));
+  }
+
+  return targets;
+}
 
 // Basic middleware
 app.use(cors());
@@ -152,6 +175,7 @@ app.post("/api/generate-code", async (req, res) => {
   const nodes = Array.isArray(rawNodes) ? rawNodes : [];
   const edges = Array.isArray(rawEdges) ? rawEdges : [];
   const changes = Array.isArray(rawChanges) ? rawChanges : [];
+  const modifierTargets = computeModifierTargets(nodes, edges);
 
   try {
     const response = await client.chat.completions.create({
@@ -169,6 +193,7 @@ app.post("/api/generate-code", async (req, res) => {
             nodes,
             edges,
             changes,
+            modifierTargets,
           }),
         },
       ],
