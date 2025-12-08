@@ -3,13 +3,23 @@
   --panel: #161922;
   --panel-raised: #1d2030;
   --border: #222838;
-  --accent: #7cf0c8;
-  --accent-strong: #5ae0b2;
+  --accent: #7c97f0;
+  --accent-strong: #7c97f0;
   --text: #ffffff;
   --muted: #c8cede;
   --ghost: #252a38;
   --note-width: 220px;
   --shadow: 0 12px 30px rgba(4, 6, 14, 0.55);
+  --button-radius: 10px;
+  --button-padding-y: 10px;
+  --button-padding-x: 14px;
+  --button-bg: transparent;
+  --button-border: transparent;
+  --button-primary-bg: var(--accent-strong);
+  --button-primary-text: #ffffff;
+  --button-primary-border: var(--accent-strong);
+  --button-primary-hover-bg: #749bc7;
+  --button-primary-shadow: none;
 }
 
 * {
@@ -172,8 +182,8 @@ body,
 }
 
 .ai-card {
-  background: rgba(124, 240, 200, 0.07);
-  border: 1px solid rgba(124, 240, 200, 0.2);
+  background: rgba(121, 118, 255, 0.07);
+  border: 1px solid rgba(24, 66, 252, 0.2);
   border-radius: 12px;
   padding: 12px;
   display: grid;
@@ -329,11 +339,13 @@ textarea {
 
 button {
   color: var(--text);
-  border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
+  border-radius: var(--button-radius);
+  padding: var(--button-padding-y) var(--button-padding-x);
   font: inherit;
   cursor: pointer;
+  box-shadow: none;
   transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
 }
 
@@ -348,10 +360,15 @@ button:active {
 }
 
 .primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0a0f15;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-weight: 700;
-  box-shadow: 0 10px 30px rgba(90, 224, 178, 0.3);
+  border: 1px solid var(--button-primary-border);
+  box-shadow: var(--button-primary-shadow);
+}
+
+.primary:hover {
+  background: var(--button-primary-hover-bg);
 }
 
 .ghost {
@@ -418,10 +435,10 @@ button:active {
 }
 
 .file-tab.active {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0a0f15;
-  border-color: var(--accent);
-  box-shadow: 0 10px 24px rgba(90, 224, 178, 0.28);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  border-color: var(--button-primary-border);
+  box-shadow: var(--button-primary-shadow);
 }
 
 .bottom-panel {
@@ -619,8 +636,9 @@ input, textarea {
 }
 
 .note-header {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 12px 14px;
   background: linear-gradient(180deg, #161927, #0f121c);
@@ -649,33 +667,46 @@ input, textarea {
 }
 
 .note-header::before {
-  content: '';
-  width: 16px;
-  height: 8px;
+  content: attr(data-node-type-label);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-right: 10px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  max-width: 10px;
+  opacity: 0.8;
+  color: transparent;
   background: var(--node-accent, #4be6a5);
-  box-shadow: 0 0 8px var(--node-accent, rgba(75, 230, 165, 0.9));
+  box-shadow: 0 0 6px var(--node-accent, rgba(75, 230, 165, 0.7));
+  transition:
+    max-width 0.25s ease,
+    padding 0.25s ease,
+    color 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease;
+  pointer-events: none; /* keep header interactions intact */
+}
+
+.note-header:hover::before,
+.note-header:focus-within::before {
+  max-width: 90px;
+  padding: 2px 8px;
+  opacity: 1;
+  color: #0a0f15;
 }
 
 .note-body .note-notes {
   margin: 0;
   padding: 0;
-}
-
-.note-type-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: var(--node-accent, #4be6a5);
-  color: #0a0f15;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border: 1px solid rgba(10, 15, 21, 0.08);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
 }
 
 .note-body--placeholder .note-notes {
@@ -713,6 +744,7 @@ input, textarea {
 .note-node.node-modifier {
   --node-accent: #4be6a5;
 }
+
 
 .hierarchy-search {
   margin-bottom: 10px;

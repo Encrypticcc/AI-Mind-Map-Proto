@@ -230,10 +230,11 @@ const NoteNode = ({ data, type }) => {
       }}
     >
       <Handle type="target" position={Position.Top} />
-      <div className="note-header">
-        <div className="note-type-chip" title={definition.description}>
-          {definition.label}
-        </div>
+      <div
+        className={`note-header note-type--${nodeType}`}
+        data-node-type-label={definition.label}
+        title={definition.label}
+      >
         <div className="note-title">{label}</div>
       </div>
       {hasNotes ? (
