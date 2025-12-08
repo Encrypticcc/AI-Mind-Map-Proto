@@ -10,6 +10,22 @@ dotenv.config();
 const CODEGEN_MODEL = process.env.OPENAI_CODEGEN_MODEL || "gpt-4.1-mini";
 const app = express();
 const port = process.env.PORT || 3001;
+const DEFAULT_NODE_TYPE = "logic";
+const VALID_NODE_TYPES = new Set([
+  "logic",
+  "descriptive",
+  "event",
+  "condition",
+  "data",
+  "output",
+]);
+const LEGACY_NODE_TYPES = {
+  note: "logic",
+  default: "logic",
+  input: "data",
+  output: "output",
+  modifier: "logic",
+};
 const systemPrompt = `
 You are the code generation engine for a visual, node-based programming tool.
 
@@ -24,6 +40,12 @@ Each node participates in the implementation and may represent:
 - a unit of behaviour (e.g. "A simple plus calculator"),
 - a high-level instruction (e.g. "Generate this is python"),
 - or a modifier of other nodes (e.g. "Add a comment at the top").
+
+NODE TYPES
+----------
+Each node includes a "nodeType" (logic, descriptive, event, condition, data, output) and an "isDescriptive" flag.
+- Descriptive nodes provide context/comments only; do not emit standalone code for them unless they are explicitly referenced by other nodes.
+- Logic, Event, Condition, Data, and Output nodes should participate in code generation.
 
 CODE MAPPING
 ------------
@@ -96,6 +118,29 @@ Rules:
 - The response must be valid JSON (no markdown fences, comments, or trailing commas).
 `;
 
+const coerceNodeType = (value) => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (VALID_NODE_TYPES.has(normalized)) return normalized;
+  if (normalized && LEGACY_NODE_TYPES[normalized]) return LEGACY_NODE_TYPES[normalized];
+  return DEFAULT_NODE_TYPE;
+};
+
+const normalizeNodeForCodegen = (node) => {
+  const nodeType = coerceNodeType(
+    node?.nodeType || node?.data?.nodeType || node?.type
+  );
+  return {
+    ...node,
+    type: nodeType,
+    nodeType,
+    data: {
+      ...(node?.data || {}),
+      nodeType,
+    },
+    isDescriptive: nodeType === "descriptive",
+  };
+};
+
 function computeModifierTargets(nodes, edges) {
   const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
   const targets = {};
@@ -104,8 +149,11 @@ function computeModifierTargets(nodes, edges) {
     // Simple heuristic for now:
     // treat nodes explicitly tagged as modifiers OR whose label mentions "comment" / "modifier" as modifiers.
     const label = (node.data?.label || "").toLowerCase();
+    const nodeType = coerceNodeType(
+      node?.nodeType || node?.data?.nodeType || node?.type
+    );
     const isModifier =
-      node.type === "modifier" ||
+      nodeType === "modifier" ||
       node.data?.kind === "modifier" ||
       label.includes("add a comment") ||
       label.includes("modifier");
@@ -174,9 +222,24 @@ app.post("/api/generate-code", async (req, res) => {
     intent = "sync",
   } = req.body || {};
 
-  const nodes = Array.isArray(rawNodes) ? rawNodes : [];
+  const nodes = Array.isArray(rawNodes)
+    ? rawNodes.map((node) => normalizeNodeForCodegen(node))
+    : [];
   const edges = Array.isArray(rawEdges) ? rawEdges : [];
-  const changes = Array.isArray(rawChanges) ? rawChanges : [];
+  const changes = Array.isArray(rawChanges)
+    ? rawChanges.map((change) => {
+        if (change?.kind !== "node") return change;
+        return {
+          ...change,
+          currentNode: change.currentNode
+            ? normalizeNodeForCodegen(change.currentNode)
+            : change.currentNode,
+          previousNode: change.previousNode
+            ? normalizeNodeForCodegen(change.previousNode)
+            : change.previousNode,
+        };
+      })
+    : [];
   const modifierTargets = computeModifierTargets(nodes, edges);
 
   try {
@@ -228,7 +291,9 @@ app.post("/api/generate-code-fake", (req, res) => {
     intent = "sync",
   } = req.body || {};
 
-  const nodes = Array.isArray(rawNodes) ? rawNodes : [];
+  const nodes = Array.isArray(rawNodes)
+    ? rawNodes.map((node) => normalizeNodeForCodegen(node))
+    : [];
   const edges = Array.isArray(rawEdges) ? rawEdges : [];
   const changes = Array.isArray(rawChanges) ? rawChanges : [];
 

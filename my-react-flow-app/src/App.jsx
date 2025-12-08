@@ -16,6 +16,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VersionControlPanel from './VersionControlPanel.jsx';
 import { nodeImplementations } from './nodes/nodeImplementations.js';
 import binIcon from './assets/bin.png';
+import {
+  ALL_NODE_TYPES,
+  DEFAULT_NODE_TYPE,
+  getNodeTypeDefinition,
+  normalizeNodeType,
+} from './nodeTypes.js';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
@@ -26,7 +32,6 @@ const MAX_SIDEBAR_WIDTH = 520;
 const MIN_BOTTOM_HEIGHT = 30;
 const MAX_BOTTOM_HEIGHT_RATIO = 0.5;
 const EXPANDED_BOTTOM_HEIGHT = 200;
-const NODE_TYPE_OPTIONS = ['note', 'default', 'input', 'output', 'modifier'];
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -140,6 +145,22 @@ const computePendingChanges = (nodes, edges, lastSyncedNodes, lastSyncedEdges) =
   });
 };
 
+const getNodeTypeId = (node, fallback = DEFAULT_NODE_TYPE) =>
+  normalizeNodeType(node?.data?.nodeType ?? node?.nodeType ?? node?.type ?? fallback);
+
+const attachNodeType = (node, preferredType) => {
+  const nodeType = preferredType ? normalizeNodeType(preferredType) : getNodeTypeId(node, DEFAULT_NODE_TYPE);
+  return {
+    ...node,
+    type: nodeType,
+    nodeType,
+    data: {
+      ...(node.data ?? {}),
+      nodeType,
+    },
+  };
+};
+
 function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -194,23 +215,36 @@ function GeneratedFilesModal({ files, onClose, isSyncing, syncError }) {
 }
 
 const NoteNode = ({ data, type }) => {
-  const nodeType = type || 'note';
+  const nodeType = normalizeNodeType(data?.nodeType ?? type);
+  const definition = getNodeTypeDefinition(nodeType);
+  const label = data?.label ?? 'Untitled Node';
+  const notes = data?.notes;
+  const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
+
   return (
     <div
       className={`note-node node-${nodeType}`}
+      style={{ '--node-accent': definition.accent }}
       onContextMenu={(event) => {
         event.stopPropagation();
       }}
     >
       <Handle type="target" position={Position.Top} />
       <div className="note-header">
-        <div className="note-title">{data.label}</div>
-      </div>
-      {data.notes ? (
-        <div className="note-body">
-          <div className="note-notes">{data.notes}</div>
+        <div className="note-type-chip" title={definition.description}>
+          {definition.label}
         </div>
-      ) : null}
+        <div className="note-title">{label}</div>
+      </div>
+      {hasNotes ? (
+        <div className="note-body">
+          <div className="note-notes">{notes}</div>
+        </div>
+      ) : (
+        <div className="note-body note-body--placeholder">
+          <div className="note-notes">{definition.defaultNotesPlaceholder}</div>
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );
@@ -219,7 +253,7 @@ const NoteNode = ({ data, type }) => {
 const initialNodes = [
   {
     id: 'controls-template',
-    type: 'note',
+    type: 'descriptive',
     position: { x: 0, y: 0 },
     data: {
       label: 'Getting started',
@@ -229,14 +263,15 @@ const initialNodes = [
         '• Scroll to zoom, drag canvas to pan',
         '• Click a node to edit or inspect it',
         '• Press Delete/Backspace to remove a node/connection'
-      ].join('\n')
+      ].join('\n'),
+      nodeType: 'descriptive',
     },
     style: { ...DEFAULT_NODE_STYLE },
   },
 
   {
     id: 'hierarchy-guide',
-    type: 'note',
+    type: 'descriptive',
     position: { x: 350, y: 0 }, // between controls + version control
     data: {
       label: 'Using the Hierarchy',
@@ -247,14 +282,15 @@ const initialNodes = [
         '• Use the + button to expand and show related/child nodes',
         '• Use the – button to collapse a group back to a single entry',
         '• Use the search bar to quickly find a node by name'
-      ].join('\n')
+      ].join('\n'),
+      nodeType: 'descriptive',
     },
     style: { ...DEFAULT_NODE_STYLE },
   },
 
   {
     id: 'version-control-guide',
-    type: 'note',
+    type: 'descriptive',
     position: { x: 700, y: 0 },
     data: {
       label: 'Using Version Control',
@@ -265,7 +301,8 @@ const initialNodes = [
         '• Use “Revert” to undo a specific change',
         '• Press Sync to generate/update code from staged changes',
         '• After syncing, changes are saved into a new version'
-      ].join('\n')
+      ].join('\n'),
+      nodeType: 'descriptive',
     },
     style: { ...DEFAULT_NODE_STYLE },
   },
@@ -283,6 +320,8 @@ const initialEdges = [
     target: 'version-control-guide',
   },
 ];
+
+const seededInitialNodes = initialNodes.map((node) => attachNodeType(node));
 
 const exampleTemplates = [
   // ================================
@@ -532,13 +571,21 @@ const buildTemplatePlacement = (template, currentNodes) => {
     const newId = `${template.id}-${now}-${index}`;
     idMap.set(node.id, newId);
     const position = node.position ?? { x: 0, y: index * 120 };
-    return {
-      id: newId,
-      type: node.type ?? 'note',
-      position: { x: baseX + position.x, y: baseY + position.y },
-      data: { label: node.label, notes: node.notes },
-      style: { ...DEFAULT_NODE_STYLE, ...(node.style ?? {}) },
-    };
+    const nodeType = normalizeNodeType(node.nodeType ?? node.type ?? DEFAULT_NODE_TYPE);
+    return attachNodeType(
+      {
+        id: newId,
+        type: nodeType,
+        position: { x: baseX + position.x, y: baseY + position.y },
+        data: {
+          ...(node.data ?? {}),
+          label: node.label ?? node.data?.label,
+          notes: node.notes ?? node.data?.notes,
+        },
+        style: { ...DEFAULT_NODE_STYLE, ...(node.style ?? {}) },
+      },
+      nodeType,
+    );
   });
 
   const placedEdges = (template.edges ?? []).map((edge, index) => ({
@@ -586,11 +633,15 @@ function AiCopilot({ selectedNodes, onApplySuggestions }) {
       .map((node) => {
         if (!node?.id) return null;
         const label = typeof node?.data?.label === 'string' ? node.data.label : '';
+        const nodeType = getNodeTypeId(node);
+        const isDescriptive = nodeType === 'descriptive';
         return {
           id: node.id,
           label: label.trim().length ? label : node.id,
           notes: node?.data?.notes ?? undefined,
-          type: node?.type,
+          nodeType,
+          type: nodeType,
+          isDescriptive,
         };
       })
       .filter(Boolean);
@@ -689,9 +740,10 @@ function AiCopilot({ selectedNodes, onApplySuggestions }) {
 
 
 function FlowCanvas() {
-  const [nodes, setNodes] = useState(initialNodes);
+  const firstNode = seededInitialNodes[0];
+  const [nodes, setNodes] = useState(seededInitialNodes);
   const [edges, setEdges] = useState(initialEdges);
-  const [lastSyncedNodes, setLastSyncedNodes] = useState(initialNodes);
+  const [lastSyncedNodes, setLastSyncedNodes] = useState(seededInitialNodes);
   const [lastSyncedEdges, setLastSyncedEdges] = useState(initialEdges);
   const [pendingChanges, setPendingChanges] = useState([]);
   const [stagedChangeIds, setStagedChangeIds] = useState([]);
@@ -700,11 +752,11 @@ function FlowCanvas() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
   const [generatedFiles, setGeneratedFiles] = useState([]);
-  const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? null);
-  const [selectedNodeIds, setSelectedNodeIds] = useState(initialNodes[0] ? [initialNodes[0].id] : []);
-  const [inspectorLabel, setInspectorLabel] = useState(initialNodes[0]?.data.label ?? '');
-  const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
-  const [inspectorType, setInspectorType] = useState(initialNodes[0]?.type ?? 'note');
+  const [selectedNodeId, setSelectedNodeId] = useState(firstNode?.id ?? null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState(firstNode ? [firstNode.id] : []);
+  const [inspectorLabel, setInspectorLabel] = useState(firstNode?.data.label ?? '');
+  const [inspectorNotes, setInspectorNotes] = useState(firstNode?.data.notes ?? '');
+  const [inspectorType, setInspectorType] = useState(getNodeTypeId(firstNode));
   const [collapsedNodes, setCollapsedNodes] = useState(() => new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(260);
@@ -779,11 +831,11 @@ function FlowCanvas() {
     if (selectedNode) {
       setInspectorLabel(selectedNode.data.label ?? '');
       setInspectorNotes(selectedNode.data.notes ?? '');
-      setInspectorType(selectedNode.type ?? 'note');
+      setInspectorType(getNodeTypeId(selectedNode));
     } else {
       setInspectorLabel('');
       setInspectorNotes('');
-      setInspectorType('note');
+      setInspectorType(DEFAULT_NODE_TYPE);
     }
   }, [selectedNode]);
 
@@ -983,21 +1035,24 @@ function FlowCanvas() {
       event.preventDefault();
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const newId = `n${Date.now()}`;
-
-      setNodes((snapshot) => [
-        ...snapshot,
+      const nodeType = DEFAULT_NODE_TYPE;
+      const newNode = attachNodeType(
         {
           id: newId,
-          type: 'note',
+          type: nodeType,
           position,
-          data: { label: 'Untitled Node', notes: 'Describe what this node should do.' },
+          data: { label: 'Untitled Node', notes: '' },
           style: { ...DEFAULT_NODE_STYLE },
         },
-      ]);
+        nodeType,
+      );
+
+      setNodes((snapshot) => [...snapshot, newNode]);
       setSelectedNodeId(newId);
       setSelectedNodeIds([newId]);
-      setInspectorLabel('New Node');
-      setInspectorNotes('');
+      setInspectorLabel(newNode.data.label ?? '');
+      setInspectorNotes(newNode.data.notes ?? '');
+      setInspectorType(nodeType);
     },
     [screenToFlowPosition],
   );
@@ -1007,20 +1062,22 @@ function FlowCanvas() {
       event.preventDefault();
       if (!selectedNodeId) return;
 
+      const nodeType = normalizeNodeType(inspectorType);
       setNodes((snapshot) =>
         snapshot.map((node) =>
           node.id === selectedNodeId
-            ? {
-                ...node,
-                type: inspectorType || 'note',
-                data: {
-                  ...node.data,
-                  label: inspectorLabel,
-                  notes: inspectorNotes,
-                  // Mark modifier intent to help backend scoping
-                  ...(inspectorType === 'modifier' ? { kind: 'modifier' } : { kind: undefined }),
+            ? attachNodeType(
+                {
+                  ...node,
+                  type: nodeType,
+                  data: {
+                    ...node.data,
+                    label: inspectorLabel,
+                    notes: inspectorNotes,
+                  },
                 },
-              }
+                nodeType,
+              )
             : node,
         ),
       );
@@ -1057,10 +1114,11 @@ function FlowCanvas() {
           }
           if (change.changeType === 'removed' && change.previousNode) {
             if (current.find((node) => node.id === change.nodeId)) return current;
-            return [...current, change.previousNode];
+            return [...current, attachNodeType(change.previousNode)];
           }
           if (change.changeType === 'modified' && change.previousNode) {
-            return current.map((node) => (node.id === change.nodeId ? change.previousNode : node));
+            const restored = attachNodeType(change.previousNode);
+            return current.map((node) => (node.id === change.nodeId ? restored : node));
           }
           return current;
         });
@@ -1090,6 +1148,17 @@ function FlowCanvas() {
 
     const stagedSet = new Set(stagedChangeIds);
     const stagedChanges = pendingChanges.filter((change) => stagedSet.has(change.id));
+    const nodesForSync = nodes.map((node) => {
+      const nodeType = getNodeTypeId(node);
+      const isDescriptive = nodeType === 'descriptive'; // Descriptive nodes feed context only; no direct code unless referenced.
+      return {
+        ...node,
+        type: nodeType,
+        nodeType,
+        data: { ...(node.data ?? {}), nodeType },
+        isDescriptive,
+      };
+    });
 
     setIsSyncing(true);
     setSyncError(null);
@@ -1099,7 +1168,7 @@ function FlowCanvas() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nodes,
+          nodes: nodesForSync,
           edges,
           changes: stagedChanges,
           intent: 'sync',
@@ -1168,14 +1237,24 @@ function FlowCanvas() {
 
   const handleLabelChange = (event) => setInspectorLabel(event.target.value);
   const handleNotesChange = (event) => setInspectorNotes(event.target.value);
-  const handleTypeChange = (event) => setInspectorType(event.target.value);
-  const nodeTypes = {
-    note: NoteNode,
-    default: NoteNode,
-    input: NoteNode,
-    output: NoteNode,
-    modifier: NoteNode,
-  };
+  const handleTypeChange = (event) => setInspectorType(normalizeNodeType(event.target.value));
+  const nodeTypes = useMemo(
+    () => ({
+      logic: NoteNode,
+      descriptive: NoteNode,
+      event: NoteNode,
+      condition: NoteNode,
+      data: NoteNode,
+      output: NoteNode,
+      // Legacy fallbacks so older graphs still render
+      note: NoteNode,
+      default: NoteNode,
+      input: NoteNode,
+      modifier: NoteNode,
+    }),
+    [],
+  );
+  const inspectorDefinition = useMemo(() => getNodeTypeDefinition(inspectorType), [inspectorType]);
   const getNodeLabel = useCallback((id) => nodesById.get(id)?.data?.label ?? id, [nodesById]);
   const versionLabel = lastSyncedVersion != null ? `v${lastSyncedVersion}` : 'Unsynced';
 
@@ -1193,16 +1272,19 @@ function FlowCanvas() {
           if (!next) return node;
           const label = typeof next.label === 'string' && next.label.trim().length ? next.label : node.data?.label;
           const notes = typeof next.notes === 'string' ? next.notes : node.data?.notes;
-          const type = typeof next.type === 'string' && next.type.trim().length ? next.type : node.type;
-          return {
-            ...node,
-            type: type || node.type,
-            data: {
-              ...node.data,
-              label: label ?? node.data?.label,
-              notes: notes ?? node.data?.notes,
+          const nodeType = normalizeNodeType(next.nodeType ?? next.type ?? node.data?.nodeType ?? node.type);
+          return attachNodeType(
+            {
+              ...node,
+              type: nodeType,
+              data: {
+                ...node.data,
+                label: label ?? node.data?.label,
+                notes: notes ?? node.data?.notes,
+              },
             },
-          };
+            nodeType,
+          );
         });
 
         const center = computeCanvasCenter(updated);
@@ -1225,18 +1307,21 @@ function FlowCanvas() {
           const label =
             typeof spec?.label === 'string' && spec.label.trim().length ? spec.label.trim() : finalId;
           const notes = typeof spec?.notes === 'string' ? spec.notes : undefined;
-          const type =
-            typeof spec?.type === 'string' && spec.type.trim().length ? spec.type.trim() : 'note';
-          return {
-            id: finalId,
-            type,
-            position: {
-              x: center.x + randomOffset(),
-              y: center.y + randomOffset(),
+          const nodeType = normalizeNodeType(spec?.nodeType ?? spec?.type ?? DEFAULT_NODE_TYPE);
+          currentIds.add(finalId);
+          return attachNodeType(
+            {
+              id: finalId,
+              type: nodeType,
+              position: {
+                x: center.x + randomOffset(),
+                y: center.y + randomOffset(),
+              },
+              data: { label, notes },
+              style: { ...DEFAULT_NODE_STYLE },
             },
-            data: { label, notes },
-            style: { ...DEFAULT_NODE_STYLE },
-          };
+            nodeType,
+          );
         });
 
         return [...updated, ...additions];
@@ -1299,6 +1384,7 @@ function FlowCanvas() {
           setSelectedNodeIds([placement.firstNode.id]);
           setInspectorLabel(placement.firstNode.data.label ?? '');
           setInspectorNotes(placement.firstNode.data.notes ?? '');
+          setInspectorType(getNodeTypeId(placement.firstNode));
         }
         return [...currentNodes, ...placement.nodes];
       });
@@ -1480,11 +1566,11 @@ function FlowCanvas() {
                   <input type="text" value={inspectorLabel} onChange={handleLabelChange} />
                 </label>
                 <label>
-                  Type
+                  Node type
                   <select value={inspectorType} onChange={handleTypeChange}>
-                    {NODE_TYPE_OPTIONS.map((option) => (
-                      <option value={option} key={option}>
-                        {option}
+                    {ALL_NODE_TYPES.map((option) => (
+                      <option value={option.id} key={option.id} title={option.description}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1493,7 +1579,7 @@ function FlowCanvas() {
                   Notes
                   <textarea
                     rows="4"
-                    placeholder="Add context..."
+                    placeholder={inspectorDefinition?.defaultNotesPlaceholder ?? 'Add context...'}
                     value={inspectorNotes}
                     onChange={handleNotesChange}
                   ></textarea>

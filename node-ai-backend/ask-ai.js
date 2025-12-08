@@ -7,6 +7,22 @@ const DEFAULT_MODEL =
   process.env.OPENAI_CODEGEN_MODEL ||
   "gpt-4.1-mini";
 const REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS) || 30000;
+const DEFAULT_NODE_TYPE = "logic";
+const VALID_NODE_TYPES = new Set([
+  "logic",
+  "descriptive",
+  "event",
+  "condition",
+  "data",
+  "output",
+]);
+const LEGACY_NODE_TYPES = {
+  note: "logic",
+  default: "logic",
+  input: "data",
+  output: "output",
+  modifier: "logic",
+};
 
 const systemPrompt = `
 You are the AI Copilot for a node-based editor. Given a user prompt and optional selected nodes, you:
@@ -18,10 +34,10 @@ Respond ONLY with JSON using the shape:
 {
   "reply": "string",                        // conversational answer to the user
   "newNodes": [                             // optional: nodes to create
-    { "id": "string", "label": "string", "notes": "string", "type": "string" }
+    { "id": "string", "label": "string", "notes": "string", "nodeType": "logic|descriptive|event|condition|data|output" }
   ],
   "updatedNodes": [                         // optional: node updates
-    { "id": "string", "label": "string", "notes": "string", "type": "string" }
+    { "id": "string", "label": "string", "notes": "string", "nodeType": "logic|descriptive|event|condition|data|output" }
   ],
   "suggestedConnections": [                 // optional: edges to add
     { "source": "string", "target": "string", "reason": "string" }
@@ -31,8 +47,16 @@ Respond ONLY with JSON using the shape:
 Rules:
 - Keep reply concise and helpful.
 - Only propose IDs the frontend can use directly (avoid collisions when possible).
+- Default nodeType to "logic" if you're unsure, and mirror it to the legacy "type" field for compatibility.
 - If unsure, leave arrays empty rather than guessing.
 `;
+
+function coerceNodeType(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (VALID_NODE_TYPES.has(normalized)) return normalized;
+  if (normalized && LEGACY_NODE_TYPES[normalized]) return LEGACY_NODE_TYPES[normalized];
+  return DEFAULT_NODE_TYPE;
+}
 
 function sanitizeSelectedNodes(raw) {
   if (!Array.isArray(raw)) return [];
@@ -46,11 +70,22 @@ function sanitizeSelectedNodes(raw) {
         typeof node.notes === "string" && node.notes.trim().length
           ? node.notes.trim()
           : undefined;
-      const type =
+      const rawType =
         typeof node.type === "string" && node.type.trim().length
           ? node.type.trim()
           : undefined;
-      return { id: id || label, label: label || id, notes, type };
+      const rawNodeType =
+        typeof node.nodeType === "string" && node.nodeType.trim().length
+          ? node.nodeType.trim()
+          : undefined;
+      const nodeType = coerceNodeType(rawNodeType || rawType);
+      return {
+        id: id || label,
+        label: label || id,
+        notes,
+        type: nodeType,
+        nodeType,
+      };
     })
     .filter(Boolean);
 }
