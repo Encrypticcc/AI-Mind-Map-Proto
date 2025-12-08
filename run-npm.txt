@@ -1,0 +1,7 @@
+FRONTEND:
+cd my-react-flow-app
+npm run dev
+
+BACKEND:
+cd node-ai-backend
+npm run dev

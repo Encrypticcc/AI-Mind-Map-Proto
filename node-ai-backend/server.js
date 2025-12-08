@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import createAskAiRouter from "./ask-ai.js";
 
 dotenv.config();
 
@@ -273,6 +274,9 @@ app.post("/api/generate-code-fake", (req, res) => {
 app.get("/api/health", (_, res) => {
   res.json({ ok: true });
 });
+
+// Ask AI Copilot route
+app.use("/api", createAskAiRouter({ client }));
 
 app.listen(port, () => {
   console.log(`Node-AI backend listening on http://localhost:${port}`);

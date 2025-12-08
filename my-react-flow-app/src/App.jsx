@@ -19,7 +19,8 @@ import binIcon from './assets/bin.png';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
-const SYNC_ENDPOINT = '/api/generate-code-fake'; // Switch to /api/generate-code when ready for real calls or /api/generate-code-fake for testing
+const SYNC_ENDPOINT = '/api/generate-code'; // Switch to /api/generate-code when ready for real calls or /api/generate-code-fake for testing
+const ASK_AI_ENDPOINT = '/api/ask-ai';
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 520;
 const MIN_BOTTOM_HEIGHT = 30;
@@ -284,223 +285,238 @@ const initialEdges = [
 ];
 
 const exampleTemplates = [
+  // ================================
+  // 1. WEBSITE TEMPLATE
+  // ================================
   {
-    id: 'js-click-counter',
-    title: 'Button click counter',
-    summary: 'Make a simple web page where a button counts how many times it was clicked.',
+    id: 'website-template',
+    title: 'Website Template',
+    summary: 'A starter template for generating any kind of website or landing page.',
     nodes: [
       {
         id: 'idea',
         label: 'What it should do',
-        notes: 'User clicks a button and sees the number go up.',
+        notes: 'Describe the purpose of the website. Example: a portfolio, landing page, shop, blog, or app homepage.',
         position: { x: 0, y: 0 },
       },
       {
         id: 'layout',
         label: 'Build the layout',
-        notes: 'Add a heading, a button, and a text area that shows the count.',
+        notes: 'Explain the page structure: hero section, features, images, text blocks, navigation, or footer.',
         position: { x: 260, y: 0 },
       },
       {
-        id: 'state',
-        label: 'Store the count',
-        notes: 'Start with count = 0 in JavaScript.',
+        id: 'style',
+        label: 'Style',
+        notes: 'Describe the design style: modern, luxury, minimalistic, colorful, dark mode, premium typography.',
         position: { x: 520, y: 0 },
       },
       {
-        id: 'logic',
-        label: 'Click logic',
-        notes: 'When the button is clicked, increase the count and update the text.',
+        id: 'functionality',
+        label: 'Functionality',
+        notes: 'Optional features: animations, forms, sliders, buttons, transitions, interactive UI elements.',
         position: { x: 780, y: 0 },
       },
       {
         id: 'export',
         label: 'Export page',
-        notes: 'Output a single HTML file that runs in any browser.',
+        notes: 'Generate a full HTML/CSS/JS website packaged in a single output or separated files.',
         position: { x: 1040, y: 0 },
       },
     ],
     edges: [
       { source: 'idea', target: 'layout' },
-      { source: 'layout', target: 'state' },
-      { source: 'state', target: 'logic' },
-      { source: 'logic', target: 'export' },
+      { source: 'layout', target: 'style' },
+      { source: 'style', target: 'functionality' },
+      { source: 'functionality', target: 'export' },
     ],
   },
 
+  // ================================
+  // 2. PYTHON SCRIPT TEMPLATE
+  // ================================
   {
-    id: 'todo-list',
-    title: 'Simple to-do list',
-    summary: 'Create a basic to-do list where users can add and remove tasks.',
+    id: 'python-template',
+    title: 'Python Script Template',
+    summary: 'A basic flow for generating any small Python tool or script.',
     nodes: [
       {
         id: 'goal',
-        label: 'Define goal',
-        notes: 'User can type a task, add it to a list, and delete it later.',
+        label: 'What it should do',
+        notes: 'Explain what the script solves: automation, calculation, file processing, API calls, or data tasks.',
         position: { x: 0, y: 0 },
       },
       {
         id: 'inputs',
-        label: 'Add input + button',
-        notes: 'Text input for the task and an "Add" button.',
+        label: 'Inputs',
+        notes: 'Describe what the script receives: user input, CLI args, files, URLs, or nothing.',
         position: { x: 260, y: 0 },
       },
       {
-        id: 'list-ui',
-        label: 'Task list UI',
-        notes: 'Show tasks in a simple vertical list.',
+        id: 'logic',
+        label: 'Core logic',
+        notes: 'Explain the main actions: loops, math, data parsing, filtering, or API requests.',
         position: { x: 520, y: 0 },
       },
       {
-        id: 'add-logic',
-        label: 'Add task logic',
-        notes: 'When user clicks "Add", push the task into an array and re-render the list.',
+        id: 'output',
+        label: 'Outputs',
+        notes: 'Describe what the script should produce: text, files, JSON, printed results, or logs.',
         position: { x: 780, y: 0 },
       },
       {
-        id: 'remove-logic',
-        label: 'Remove task logic',
-        notes: 'Each task has a small "x" button to delete it from the array.',
+        id: 'package',
+        label: 'Export script',
+        notes: 'Generate a ready-to-run .py file using clean functions and comments.',
         position: { x: 1040, y: 0 },
       },
     ],
     edges: [
       { source: 'goal', target: 'inputs' },
-      { source: 'inputs', target: 'list-ui' },
-      { source: 'list-ui', target: 'add-logic' },
-      { source: 'add-logic', target: 'remove-logic' },
+      { source: 'inputs', target: 'logic' },
+      { source: 'logic', target: 'output' },
+      { source: 'output', target: 'package' },
     ],
   },
 
+  // ================================
+  // 3. BACKEND API TEMPLATE
+  // ================================
   {
-    id: 'contact-form-api',
-    title: 'Contact form handler',
-    summary: 'Take a simple contact form and send the message to a backend endpoint.',
+    id: 'backend-template',
+    title: 'Backend API Template',
+    summary: 'Template for building a simple backend or microservice.',
     nodes: [
       {
-        id: 'form-ui',
-        label: 'Design form',
-        notes: 'Fields: name, email, message, and a Send button.',
+        id: 'purpose',
+        label: 'What it should do',
+        notes: 'Describe the API goal: store data, fetch something, authenticate users, etc.',
         position: { x: 0, y: 0 },
       },
       {
-        id: 'validate-form',
-        label: 'Validate input',
-        notes: 'Check required fields, basic email format, and message length.',
+        id: 'routes',
+        label: 'Endpoints',
+        notes: 'List the routes needed: GET /items, POST /login, etc.',
         position: { x: 260, y: 0 },
       },
       {
-        id: 'send-request',
-        label: 'Send to API',
-        notes: 'POST JSON to /contact with the form data.',
+        id: 'logic',
+        label: 'Server logic',
+        notes: 'Explain the actions each endpoint performs (validation, saving, reading, processing).',
         position: { x: 520, y: 0 },
       },
       {
-        id: 'handle-response',
-        label: 'Handle response',
-        notes: 'If success, show a thank-you message; if error, show a friendly error.',
+        id: 'database',
+        label: 'Data',
+        notes: 'Describe whether it uses a database, in-memory data, or no storage at all.',
         position: { x: 780, y: 0 },
       },
       {
-        id: 'save-server',
-        label: 'Server action',
-        notes: 'On the backend, log or email the message.',
+        id: 'export',
+        label: 'Export project',
+        notes: 'Generate the API in Node, Python, or another backend language of your choice.',
         position: { x: 1040, y: 0 },
       },
     ],
     edges: [
-      { source: 'form-ui', target: 'validate-form' },
-      { source: 'validate-form', target: 'send-request' },
-      { source: 'send-request', target: 'handle-response' },
-      { source: 'send-request', target: 'save-server' },
+      { source: 'purpose', target: 'routes' },
+      { source: 'routes', target: 'logic' },
+      { source: 'logic', target: 'database' },
+      { source: 'database', target: 'export' },
     ],
   },
 
+  // ================================
+  // 4. AUTOMATION WORKFLOW TEMPLATE
+  // ================================
   {
-    id: 'note-summarizer',
-    title: 'Short note summarizer',
-    summary: 'Paste a long note and get a short, clear summary.',
+    id: 'automation-template',
+    title: 'Automation Workflow Template',
+    summary: 'A template for creating an automated task or scheduled process.',
     nodes: [
+      {
+        id: 'task',
+        label: 'What it should automate',
+        notes: 'Describe the workflow: file renaming, reminders, backups, syncing, scraping, etc.',
+        position: { x: 0, y: 0 },
+      },
+      {
+        id: 'trigger',
+        label: 'Trigger',
+        notes: 'Explain when it runs: manually, on a timer, daily, or after an event.',
+        position: { x: 260, y: 0 },
+      },
+      {
+        id: 'processing',
+        label: 'Processing steps',
+        notes: 'Describe each step of the automation in simple bullet points.',
+        position: { x: 520, y: 0 },
+      },
+      {
+        id: 'result',
+        label: 'Result',
+        notes: 'Explain what the automation produces or updates.',
+        position: { x: 780, y: 0 },
+      },
+      {
+        id: 'export',
+        label: 'Export workflow',
+        notes: 'Generate a script, cron job, bot, or tool that performs the automation.',
+        position: { x: 1040, y: 0 },
+      },
+    ],
+    edges: [
+      { source: 'task', target: 'trigger' },
+      { source: 'trigger', target: 'processing' },
+      { source: 'processing', target: 'result' },
+      { source: 'result', target: 'export' },
+    ],
+  },
+
+  // ================================
+  // 5. AI TOOL TEMPLATE
+  // ================================
+  {
+    id: 'ai-template',
+    title: 'AI Tool Template',
+    summary: 'A simple template for generating an AI-powered feature or model workflow.',
+    nodes: [
+      {
+        id: 'goal',
+        label: 'What the AI should do',
+        notes: 'Explain the AI task: summarizing, classifying, generating text, answering questions, etc.',
+        position: { x: 0, y: 0 },
+      },
       {
         id: 'input',
-        label: 'Paste text',
-        notes: 'User pastes a long note, email, or document.',
-        position: { x: 0, y: 0 },
-      },
-      {
-        id: 'clean-text',
-        label: 'Clean text',
-        notes: 'Strip extra spaces and very long repeated lines.',
+        label: 'Input type',
+        notes: 'What the AI receives: text, images, numbers, instructions, or mixed content.',
         position: { x: 260, y: 0 },
       },
       {
-        id: 'call-llm',
-        label: 'Ask the LLM',
-        notes: 'Send the cleaned text with a prompt like: "Summarize in 3 bullet points."',
+        id: 'prompting',
+        label: 'AI behavior',
+        notes: 'Describe the style, tone, output format, and rules the AI should follow.',
         position: { x: 520, y: 0 },
       },
       {
-        id: 'format-output',
-        label: 'Format answer',
-        notes: 'Return neat bullets with the key points only.',
+        id: 'output',
+        label: 'Response format',
+        notes: 'Decide how the output should look: bullets, summary, JSON, HTML, or natural text.',
         position: { x: 780, y: 0 },
       },
       {
-        id: 'show-result',
-        label: 'Show summary',
-        notes: 'Display the summary below the input, ready to copy.',
+        id: 'export',
+        label: 'Export tool',
+        notes: 'Generate the AI-powered script, endpoint, or packaged module.',
         position: { x: 1040, y: 0 },
       },
     ],
     edges: [
-      { source: 'input', target: 'clean-text' },
-      { source: 'clean-text', target: 'call-llm' },
-      { source: 'call-llm', target: 'format-output' },
-      { source: 'format-output', target: 'show-result' },
-    ],
-  },
-
-  {
-    id: 'image-resize',
-    title: 'Simple image resizer',
-    summary: 'Upload one image and get a smaller version for the web.',
-    nodes: [
-      {
-        id: 'pick-image',
-        label: 'Choose image',
-        notes: 'User uploads a PNG or JPG.',
-        position: { x: 0, y: 0 },
-      },
-      {
-        id: 'check-size',
-        label: 'Check file size',
-        notes: 'If the image is too large (e.g. > 5MB), show a warning.',
-        position: { x: 260, y: 0 },
-      },
-      {
-        id: 'resize-image',
-        label: 'Resize',
-        notes: 'Scale the image down to a max width, e.g. 1200px.',
-        position: { x: 520, y: 0 },
-      },
-      {
-        id: 'optimize',
-        label: 'Optimize',
-        notes: 'Light compression so it loads faster on websites.',
-        position: { x: 780, y: 0 },
-      },
-      {
-        id: 'download',
-        label: 'Download result',
-        notes: 'Return the new image for the user to save.',
-        position: { x: 1040, y: 0 },
-      },
-    ],
-    edges: [
-      { source: 'pick-image', target: 'check-size' },
-      { source: 'check-size', target: 'resize-image' },
-      { source: 'resize-image', target: 'optimize' },
-      { source: 'optimize', target: 'download' },
+      { source: 'goal', target: 'input' },
+      { source: 'input', target: 'prompting' },
+      { source: 'prompting', target: 'output' },
+      { source: 'output', target: 'export' },
     ],
   },
 ];
@@ -538,6 +554,138 @@ const buildTemplatePlacement = (template, currentNodes) => {
   return { nodes: placedNodes, edges: placedEdges, firstNode };
 };
 
+function AiCopilot({ selectedNodes, onApplySuggestions }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [answer, setAnswer] = useState(null);
+
+  const handleOpen = () => {
+    setIsOpen(true);
+    setInput('');
+    setAnswer(null);
+    setError(null);
+    setIsLoading(false);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+  };
+
+  const handleSubmit = async (event) => {
+    event?.preventDefault?.();
+    const prompt = input.trim();
+    if (!prompt) return;
+
+    setIsLoading(true);
+    setError(null);
+    setAnswer(null);
+
+    const selectedNodesPayload = (selectedNodes ?? [])
+      .map((node) => {
+        if (!node?.id) return null;
+        const label = typeof node?.data?.label === 'string' ? node.data.label : '';
+        return {
+          id: node.id,
+          label: label.trim().length ? label : node.id,
+          notes: node?.data?.notes ?? undefined,
+          type: node?.type,
+        };
+      })
+      .filter(Boolean);
+
+    const body = { prompt };
+    if (selectedNodesPayload.length) {
+      body.selectedNodes = selectedNodesPayload;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}${ASK_AI_ENDPOINT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let message = 'Request failed.';
+        try {
+          const errorData = await response.json();
+          message = errorData?.error || message;
+        } catch (_) {
+          // ignore parse errors
+        }
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+      const payload = {
+        reply: typeof data?.reply === 'string' ? data.reply : '',
+        newNodes: Array.isArray(data?.newNodes) ? data.newNodes : [],
+        updatedNodes: Array.isArray(data?.updatedNodes) ? data.updatedNodes : [],
+        suggestedConnections: Array.isArray(data?.suggestedConnections)
+          ? data.suggestedConnections
+          : [],
+      };
+
+      setAnswer(payload.reply || 'Agent responded but did not include a reply.');
+      if (onApplySuggestions) {
+        onApplySuggestions(payload);
+      }
+    } catch (err) {
+      console.error('Ask AI error', err);
+      setError(err?.message || 'Something went wrong talking to the Agent. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="ai-card">
+      <p>Ask for ideas, reword nodes, or auto-connect concepts.</p>
+      <button type="button" className="primary full" onClick={handleOpen}>
+        Ask Agent
+      </button>
+
+      {isOpen ? (
+        <div className="ai-dialog-backdrop">
+          <div className="ai-dialog" role="dialog" aria-modal="true">
+            <div className="ai-dialog-title">Ask Agent</div>
+            <p className="ai-dialog-helper">
+              Ask for ideas, reword nodes, or auto-connect concepts. The Agent will use the currently selected nodes as
+              context.
+            </p>
+            <form className="ai-dialog-form" onSubmit={handleSubmit}>
+              <textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Describe what you'd like help with..."
+                rows="4"
+              ></textarea>
+
+              <div className="ai-dialog-status">
+                {isLoading ? <span className="ai-dialog-thinking">Thinking...</span> : null}
+              </div>
+
+              {error ? <div className="ai-dialog-error">{error}</div> : null}
+              {answer ? <div className="ai-dialog-answer">{answer}</div> : null}
+
+              <div className="ai-dialog-actions">
+                <button type="button" className="ghost" onClick={handleClose} disabled={isLoading}>
+                  Close
+                </button>
+                <button type="submit" className="primary" disabled={isLoading || !input.trim()}>
+                  {isLoading ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 
 
 function FlowCanvas() {
@@ -553,6 +701,7 @@ function FlowCanvas() {
   const [syncError, setSyncError] = useState(null);
   const [generatedFiles, setGeneratedFiles] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState(initialNodes[0] ? [initialNodes[0].id] : []);
   const [inspectorLabel, setInspectorLabel] = useState(initialNodes[0]?.data.label ?? '');
   const [inspectorNotes, setInspectorNotes] = useState(initialNodes[0]?.data.notes ?? '');
   const [inspectorType, setInspectorType] = useState(initialNodes[0]?.type ?? 'note');
@@ -564,7 +713,7 @@ function FlowCanvas() {
   const [isBottomDragging, setIsBottomDragging] = useState(false);
   const seenChangeIdsRef = useRef(new Set());
   const dragStateRef = useRef({ active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
-  const { screenToFlowPosition, setCenter } = useReactFlow();
+  const { screenToFlowPosition, setCenter, fitView } = useReactFlow();
   const nodeImplementationMap = useMemo(() => nodeImplementations, []);
   const getNodeImplementation = useCallback((nodeId) => nodeImplementationMap[nodeId], [nodeImplementationMap]);
 
@@ -586,6 +735,29 @@ function FlowCanvas() {
     nodes.forEach((node) => map.set(node.id, node));
     return map;
   }, [nodes]);
+  const computeCanvasCenter = useCallback((nodeList) => {
+    if (!nodeList.length) return { x: 0, y: 0 };
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    nodeList.forEach((node) => {
+      const x = node?.position?.x ?? 0;
+      const y = node?.position?.y ?? 0;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    });
+    return {
+      x: (minX + maxX) / 2 || 0,
+      y: (minY + maxY) / 2 || 0,
+    };
+  }, []);
+  const selectedNodesForContext = useMemo(
+    () => selectedNodeIds.map((id) => nodesById.get(id)).filter(Boolean),
+    [nodesById, selectedNodeIds],
+  );
 
   const childrenMap = useMemo(() => {
     const map = new Map();
@@ -684,17 +856,21 @@ function FlowCanvas() {
 
   const onNodeClick = useCallback((_, node) => {
     setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
   }, []);
 
   const onNodeDragStart = useCallback((_, node) => {
     setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
   }, []);
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes }) => {
     if (selectedNodes?.length) {
       setSelectedNodeId(selectedNodes[0].id);
+      setSelectedNodeIds(selectedNodes.map((node) => node.id));
     } else {
       setSelectedNodeId(null);
+      setSelectedNodeIds([]);
     }
   }, []);
 
@@ -715,6 +891,7 @@ function FlowCanvas() {
       const node = nodesById.get(nodeId);
       if (!node) return;
       setSelectedNodeId(nodeId);
+      setSelectedNodeIds([nodeId]);
       const width = node.width ?? node.style?.width ?? node.style?.minWidth ?? 0;
       const height = node.height ?? node.style?.height ?? node.style?.minHeight ?? 0;
       const centerX = node.position.x + width / 2;
@@ -818,6 +995,7 @@ function FlowCanvas() {
         },
       ]);
       setSelectedNodeId(newId);
+      setSelectedNodeIds([newId]);
       setInspectorLabel('New Node');
       setInspectorNotes('');
     },
@@ -1000,6 +1178,114 @@ function FlowCanvas() {
   };
   const getNodeLabel = useCallback((id) => nodesById.get(id)?.data?.label ?? id, [nodesById]);
   const versionLabel = lastSyncedVersion != null ? `v${lastSyncedVersion}` : 'Unsynced';
+
+  const applyAiSuggestions = useCallback(
+    (result) => {
+      if (!result) return;
+      const { newNodes = [], updatedNodes = [], suggestedConnections = [] } = result;
+      const idMap = new Map();
+
+      setNodes((currentNodes) => {
+        const currentIds = new Set(currentNodes.map((node) => node.id));
+
+        const updated = currentNodes.map((node) => {
+          const next = updatedNodes.find((item) => item?.id === node.id);
+          if (!next) return node;
+          const label = typeof next.label === 'string' && next.label.trim().length ? next.label : node.data?.label;
+          const notes = typeof next.notes === 'string' ? next.notes : node.data?.notes;
+          const type = typeof next.type === 'string' && next.type.trim().length ? next.type : node.type;
+          return {
+            ...node,
+            type: type || node.type,
+            data: {
+              ...node.data,
+              label: label ?? node.data?.label,
+              notes: notes ?? node.data?.notes,
+            },
+          };
+        });
+
+        const center = computeCanvasCenter(updated);
+        const randomOffset = () => (Math.random() - 0.5) * 240;
+        const ensureId = (baseId) => {
+          const safeBase = baseId && baseId.trim().length ? baseId.trim() : 'ai-node';
+          let candidate = safeBase;
+          let suffix = 1;
+          while (currentIds.has(candidate)) {
+            candidate = `${safeBase}-${suffix}`;
+            suffix += 1;
+          }
+          currentIds.add(candidate);
+          return candidate;
+        };
+
+        const additions = (Array.isArray(newNodes) ? newNodes : []).map((spec, index) => {
+          const finalId = ensureId(spec?.id || `ai-node-${index}`);
+          idMap.set(spec?.id || finalId, finalId);
+          const label =
+            typeof spec?.label === 'string' && spec.label.trim().length ? spec.label.trim() : finalId;
+          const notes = typeof spec?.notes === 'string' ? spec.notes : undefined;
+          const type =
+            typeof spec?.type === 'string' && spec.type.trim().length ? spec.type.trim() : 'note';
+          return {
+            id: finalId,
+            type,
+            position: {
+              x: center.x + randomOffset(),
+              y: center.y + randomOffset(),
+            },
+            data: { label, notes },
+            style: { ...DEFAULT_NODE_STYLE },
+          };
+        });
+
+        return [...updated, ...additions];
+      });
+
+      setEdges((currentEdges) => {
+        const existingIds = new Set(currentEdges.map((edge) => edge.id));
+        const existingPairs = new Set(currentEdges.map((edge) => `${edge.source}->${edge.target}`));
+        const additions = [];
+
+        (Array.isArray(suggestedConnections) ? suggestedConnections : []).forEach((conn, index) => {
+          const source = idMap.get(conn?.source) || conn?.source;
+          const target = idMap.get(conn?.target) || conn?.target;
+          if (!source || !target) return;
+          const pairKey = `${source}->${target}`;
+          if (existingPairs.has(pairKey)) return;
+          let edgeId =
+            (conn && typeof conn.id === 'string' && conn.id.trim().length && conn.id.trim()) ||
+            `${source}-${target}`;
+          let suffix = 1;
+          while (existingIds.has(edgeId)) {
+            edgeId = `${source}-${target}-${suffix}`;
+            suffix += 1;
+          }
+          existingIds.add(edgeId);
+          existingPairs.add(pairKey);
+          additions.push({
+            id: edgeId,
+            source,
+            target,
+            animated: false,
+          });
+        });
+
+        return [...currentEdges, ...additions];
+      });
+
+      setTimeout(() => {
+        try {
+          fitView({ padding: 0.2, duration: 600 });
+        } catch (err) {
+          const center = computeCanvasCenter(nodes);
+          setCenter(center.x, center.y, { zoom: 1, duration: 400 });
+        }
+      }, 50);
+    },
+    [computeCanvasCenter, fitView, nodes, setCenter],
+  );
+
   const handleInsertExample = useCallback(
     (templateId) => {
       const template = exampleTemplates.find((item) => item.id === templateId);
@@ -1010,13 +1296,14 @@ function FlowCanvas() {
         setEdges((currentEdges) => [...currentEdges, ...placement.edges]);
         if (placement.firstNode) {
           setSelectedNodeId(placement.firstNode.id);
+          setSelectedNodeIds([placement.firstNode.id]);
           setInspectorLabel(placement.firstNode.data.label ?? '');
           setInspectorNotes(placement.firstNode.data.notes ?? '');
         }
         return [...currentNodes, ...placement.nodes];
       });
     },
-    [exampleTemplates, setEdges, setInspectorLabel, setInspectorNotes, setSelectedNodeId],
+    [exampleTemplates, setEdges, setInspectorLabel, setInspectorNotes, setSelectedNodeId, setSelectedNodeIds],
   );
   const startResize = useCallback(
     (side, event) => {
@@ -1093,11 +1380,8 @@ function FlowCanvas() {
             </ul>
           </div>
           <div className="panel">
-            <div className="panel-header">AI Copilot</div>
-            <div className="ai-card">
-              <p>Ask for ideas, reword nodes, or auto-connect concepts.</p>
-              <button className="primary full">Ask AI</button>
-            </div>
+            <div className="panel-header">Agent</div>
+            <AiCopilot selectedNodes={selectedNodesForContext} onApplySuggestions={applyAiSuggestions} />
           </div>
           <div className="panel">
             <div className="panel-header-row">

@@ -180,6 +180,88 @@ body,
   gap: 10px;
 }
 
+.ai-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 40;
+}
+
+.ai-dialog {
+  width: min(520px, 100%);
+  background: linear-gradient(150deg, var(--panel), var(--panel-raised));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.ai-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.ai-dialog-helper {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+.ai-dialog-form {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-dialog textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.ai-dialog-status {
+  min-height: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ai-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-dialog-answer {
+  background: rgba(124, 240, 200, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.ai-dialog-error {
+  background: rgba(255, 105, 97, 0.1);
+  border: 1px solid rgba(255, 105, 97, 0.35);
+  color: #ff9b9b;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.ai-dialog-thinking {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .example-list {
   display: flex;
   flex-direction: column;
