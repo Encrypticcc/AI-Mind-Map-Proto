@@ -941,6 +941,47 @@ function FlowCanvas() {
     return rootNodes.length ? rootNodes : nodes;
   }, [nodes, edges]);
 
+  const duplicateSelectedNode = useCallback(() => {
+    if (!selectedNodeId) return;
+    const currentNodes = nodesRef.current ?? [];
+    const source = currentNodes.find((node) => node.id === selectedNodeId);
+    if (!source) return;
+
+    const existingIds = new Set(currentNodes.map((node) => node.id));
+    const baseId = `${source.id}-copy`;
+    let candidate = baseId;
+    let suffix = 1;
+    while (existingIds.has(candidate)) {
+      candidate = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+
+    const nodeType = getNodeTypeId(source);
+    const duplicated = attachNodeType(
+      {
+        ...source,
+        id: candidate,
+        position: {
+          x: (source.position?.x ?? 0) + 30,
+          y: (source.position?.y ?? 0) + 30,
+        },
+        data: { ...(source.data ?? {}) },
+        style: { ...(source.style ?? {}) },
+      },
+      nodeType,
+    );
+
+    setNodes((snapshot) => {
+      const clearedSelection = snapshot.map((node) => ({ ...node, selected: false }));
+      return [...clearedSelection, { ...duplicated, selected: true }];
+    });
+    setSelectedNodeId(candidate);
+    setSelectedNodeIds([candidate]);
+    setInspectorLabel(duplicated.data?.label ?? '');
+    setInspectorNotes(duplicated.data?.notes ?? '');
+    setInspectorType(getNodeTypeId(duplicated));
+  }, [selectedNodeId]);
+
   const applySnapshot = useCallback(
     (snapshot) => {
       if (!snapshot) return;
@@ -1044,19 +1085,29 @@ function FlowCanvas() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (!(event.ctrlKey || event.metaKey)) return;
-      if (!event.key || event.key.toLowerCase() !== 'z') return;
+      if (!event.key) return;
+      const key = event.key.toLowerCase();
       if (isEditableElement(event.target)) return;
-      event.preventDefault();
-      if (event.shiftKey) {
-        redo();
-      } else {
-        undo();
+
+      if (key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (key === 'd') {
+        event.preventDefault();
+        duplicateSelectedNode();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [redo, undo]);
+  }, [duplicateSelectedNode, redo, undo]);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
