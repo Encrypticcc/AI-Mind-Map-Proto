@@ -52,9 +52,9 @@ CODE MAPPING
 
 For each node that participates in the implementation, you must generate or update code wrapped in markers of the form:
 
-// <NODE:{nodeId}:START>
+<NODE:{nodeId}:START>
 ... implementation ...
-// <NODE:{nodeId}:END>
+<NODE:{nodeId}:END>
 
 These markers must be stable across syncs so that specific node regions can be updated later.
 
