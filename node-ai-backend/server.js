@@ -2,12 +2,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import OpenAI from "openai";
 import createAskAiRouter from "./ask-ai.js";
+import { buildLlmClient, resolveCodegenModel } from "./llm-client.js";
 
 dotenv.config();
 
-const CODEGEN_MODEL = process.env.OPENAI_CODEGEN_MODEL || "gpt-4.1-mini";
+const CODEGEN_MODEL = resolveCodegenModel();
 const app = express();
 const port = process.env.PORT || 3001;
 const DEFAULT_NODE_TYPE = "logic";
@@ -174,10 +174,8 @@ function computeModifierTargets(nodes, edges) {
 app.use(cors());
 app.use(express.json());
 
-// OpenAI client (reads OPENAI_API_KEY from .env)
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// LLM client (OpenAI-compatible; supports OpenAI or Groq via env)
+const client = buildLlmClient();
 
 // Simple test route: generate nodes from a prompt + current graph
 app.post("/api/generate-nodes", async (req, res) => {

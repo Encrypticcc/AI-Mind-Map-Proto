@@ -1,11 +1,5 @@
 import express from "express";
-import OpenAI from "openai";
-
-const DEFAULT_MODEL =
-  process.env.OPENAI_COPILOT_MODEL ||
-  process.env.OPENAI_MODEL ||
-  process.env.OPENAI_CODEGEN_MODEL ||
-  "gpt-4.1-mini";
+import { buildLlmClient, resolveAskModel } from "./llm-client.js";
 const REQUEST_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS) || 30000;
 const DEFAULT_NODE_TYPE = "logic";
 const VALID_NODE_TYPES = new Set([
@@ -111,16 +105,12 @@ function normalizeResponse(json) {
 }
 
 export function createAskAiRouter({ client, model } = {}) {
-  const openai =
-    client ||
-    new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+  const openai = client || buildLlmClient();
 
-  const modelName = model || DEFAULT_MODEL;
   const router = express.Router();
 
   router.post("/ask-ai", async (req, res) => {
+    const modelName = model || resolveAskModel();
     const { prompt, selectedNodes: rawSelectedNodes } = req.body || {};
 
     if (!prompt || typeof prompt !== "string" || !prompt.trim().length) {
