@@ -32,6 +32,15 @@ const MAX_SIDEBAR_WIDTH = 520;
 const MIN_BOTTOM_HEIGHT = 30;
 const MAX_BOTTOM_HEIGHT_RATIO = 0.5;
 const EXPANDED_BOTTOM_HEIGHT = 200;
+const HISTORY_LIMIT = 50;
+
+const isEditableElement = (element) => {
+  if (!element) return false;
+  const tagName = element.tagName;
+  const editableTypes = ['INPUT', 'TEXTAREA'];
+  const role = element.getAttribute ? element.getAttribute('role') : null;
+  return Boolean(element.isContentEditable || editableTypes.includes(tagName) || role === 'textbox');
+};
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -61,6 +70,41 @@ const isEdgeEqual = (a, b) => {
   if (!shallowEqualObjects(a.data ?? {}, b.data ?? {})) return false;
   return true;
 };
+
+const areNodeListsEqual = (a = [], b = []) => {
+  if (a.length !== b.length) return false;
+  const mapB = new Map(b.map((node) => [node.id, node]));
+  for (const node of a) {
+    const other = mapB.get(node.id);
+    if (!other) return false;
+    const posA = node.position ?? {};
+    const posB = other.position ?? {};
+    if (posA.x !== posB.x || posA.y !== posB.y) return false;
+    if (node.type !== other.type) return false;
+    if (!shallowEqualObjects(node.style ?? {}, other.style ?? {})) return false;
+    if (!shallowEqualObjects(node.data ?? {}, other.data ?? {})) return false;
+  }
+  return true;
+};
+
+const areEdgeListsEqual = (a = [], b = []) => {
+  if (a.length !== b.length) return false;
+  const mapB = new Map(b.map((edge) => [edge.id, edge]));
+  for (const edge of a) {
+    const other = mapB.get(edge.id);
+    if (!other) return false;
+    if (!isEdgeEqual(edge, other)) return false;
+    if ((edge.type ?? null) !== (other.type ?? null)) return false;
+    if ((edge.label ?? null) !== (other.label ?? null)) return false;
+    if ((edge.animated ?? false) !== (other.animated ?? false)) return false;
+  }
+  return true;
+};
+
+const areGraphsEqual = (prevNodes, prevEdges, nextNodes, nextEdges) =>
+  areNodeListsEqual(prevNodes, nextNodes) && areEdgeListsEqual(prevEdges, nextEdges);
+
+const cloneGraphState = (nodes, edges) => JSON.parse(JSON.stringify({ nodes, edges }));
 
 const computePendingChanges = (nodes, edges, lastSyncedNodes, lastSyncedEdges) => {
   const changes = [];
@@ -789,6 +833,15 @@ function FlowCanvas() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(30);
   const [isBottomDragging, setIsBottomDragging] = useState(false);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  const isDraggingRef = useRef(false);
+  const dragStartSnapshotRef = useRef(null);
+  const skipHistoryOnceRef = useRef(false);
+  const historyRef = useRef([]);
+  const futureRef = useRef([]);
+  const isRestoringRef = useRef(false);
+  const prevGraphRef = useRef(cloneGraphState(seededInitialNodes, initialEdges));
   const seenChangeIdsRef = useRef(new Set());
   const dragStateRef = useRef({ active: null, startX: 0, startY: 0, startWidth: 0, startHeight: 0 });
   const { screenToFlowPosition, setCenter, fitView } = useReactFlow();
@@ -799,6 +852,41 @@ function FlowCanvas() {
     const computed = computePendingChanges(nodes, edges, lastSyncedNodes, lastSyncedEdges);
     setPendingChanges(computed);
   }, [nodes, edges, lastSyncedNodes, lastSyncedEdges]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      prevGraphRef.current = cloneGraphState(nodes, edges);
+      isRestoringRef.current = false;
+      return;
+    }
+
+    if (skipHistoryOnceRef.current) {
+      skipHistoryOnceRef.current = false;
+      prevGraphRef.current = cloneGraphState(nodes, edges);
+      return;
+    }
+
+    if (isDraggingRef.current) {
+      return;
+    }
+
+    const previous = prevGraphRef.current;
+    if (previous && !areGraphsEqual(previous.nodes, previous.edges, nodes, edges)) {
+      historyRef.current = [...historyRef.current, previous].slice(-HISTORY_LIMIT);
+      futureRef.current = [];
+      prevGraphRef.current = cloneGraphState(nodes, edges);
+    } else if (!previous) {
+      prevGraphRef.current = cloneGraphState(nodes, edges);
+    }
+  }, [nodes, edges]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -852,6 +940,40 @@ function FlowCanvas() {
     const rootNodes = nodes.filter((node) => !targets.has(node.id));
     return rootNodes.length ? rootNodes : nodes;
   }, [nodes, edges]);
+
+  const applySnapshot = useCallback(
+    (snapshot) => {
+      if (!snapshot) return;
+      const allowedIds = new Set(snapshot.nodes.map((node) => node.id));
+      isRestoringRef.current = true;
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
+      setSelectedNodeId((current) => (allowedIds.has(current) ? current : snapshot.nodes[0]?.id ?? null));
+      setSelectedNodeIds((currentIds) => {
+        const filtered = currentIds.filter((id) => allowedIds.has(id));
+        if (filtered.length) return filtered;
+        const fallback = snapshot.nodes[0]?.id;
+        return fallback ? [fallback] : [];
+      });
+    },
+    [setEdges, setNodes, setSelectedNodeId, setSelectedNodeIds],
+  );
+
+  const undo = useCallback(() => {
+    if (!historyRef.current.length) return;
+    const previous = historyRef.current.pop();
+    futureRef.current.push(cloneGraphState(nodesRef.current, edgesRef.current));
+    applySnapshot(previous);
+  }, [applySnapshot]);
+
+  const redo = useCallback(() => {
+    if (!futureRef.current.length) return;
+    const next = futureRef.current.pop();
+    historyRef.current = [...historyRef.current, cloneGraphState(nodesRef.current, edgesRef.current)].slice(
+      -HISTORY_LIMIT,
+    );
+    applySnapshot(next);
+  }, [applySnapshot]);
 
   useEffect(() => {
     if (selectedNode) {
@@ -919,6 +1041,23 @@ function FlowCanvas() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (!event.key || event.key.toLowerCase() !== 'z') return;
+      if (isEditableElement(event.target)) return;
+      event.preventDefault();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [redo, undo]);
+
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
@@ -937,9 +1076,35 @@ function FlowCanvas() {
     setSelectedNodeIds([node.id]);
   }, []);
 
-  const onNodeDragStart = useCallback((_, node) => {
-    setSelectedNodeId(node.id);
-    setSelectedNodeIds([node.id]);
+  const onNodeDragStart = useCallback(
+    (_, node) => {
+      setSelectedNodeId(node.id);
+      setSelectedNodeIds([node.id]);
+      if (!isDraggingRef.current) {
+        isDraggingRef.current = true;
+        dragStartSnapshotRef.current = cloneGraphState(nodesRef.current, edgesRef.current);
+      }
+    },
+    [edgesRef, nodesRef],
+  );
+
+  const onNodeDragStop = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    const startSnapshot = dragStartSnapshotRef.current;
+    const endSnapshot = cloneGraphState(nodesRef.current, edgesRef.current);
+    isDraggingRef.current = false;
+    dragStartSnapshotRef.current = null;
+
+    if (!startSnapshot || areGraphsEqual(startSnapshot.nodes, startSnapshot.edges, endSnapshot.nodes, endSnapshot.edges)) {
+      prevGraphRef.current = endSnapshot;
+      skipHistoryOnceRef.current = true;
+      return;
+    }
+
+    historyRef.current = [...historyRef.current, startSnapshot].slice(-HISTORY_LIMIT);
+    futureRef.current = [];
+    prevGraphRef.current = endSnapshot;
+    skipHistoryOnceRef.current = true;
   }, []);
 
   const onSelectionChange = useCallback(({ nodes: selectedNodes }) => {
@@ -1544,15 +1709,16 @@ function FlowCanvas() {
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onNodeDragStart={onNodeDragStart}
-              onSelectionChange={onSelectionChange}
-              onPaneContextMenu={onPaneContextMenu}
-              deleteKeyCode={['Delete', 'Backspace']}
-              nodeTypes={nodeTypes}
-              fitView
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDragStop={onNodeDragStop}
+            onSelectionChange={onSelectionChange}
+            onPaneContextMenu={onPaneContextMenu}
+            deleteKeyCode={['Delete', 'Backspace']}
+            nodeTypes={nodeTypes}
+            fitView
             >
               <Controls />
               <MiniMap />
