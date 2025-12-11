@@ -31,7 +31,7 @@ export const initialNodes = [
         '• Click a node in the Hierarchy to select and focus it on the canvas',
         '• Selecting a node on the canvas also highlights it in the Hierarchy',
         '• Use the + button to expand and show related/child nodes',
-        '• Use the ƒ?" button to collapse a group back to a single entry',
+        '• Use the - button to collapse a group back to a single entry',
         '• Use the search bar to quickly find a node by name'
       ].join('\n'),
       nodeType: 'descriptive',
@@ -47,9 +47,9 @@ export const initialNodes = [
       label: 'Using Version Control',
       notes: [
         '• Each edit appears in the Version Control panel',
-        '• Click a change to stage it ƒ?" only staged changes will sync',
-        '• Use ƒ?oStage allƒ?? to quickly stage everything',
-        '• Use ƒ?oRevertƒ?? to undo a specific change',
+        '• Click a change to stage it — only staged changes will sync',
+        '• Use “Stage all” to quickly stage everything',
+        '• Use “Revert” to undo a specific change',
         '• Press Sync to generate/update code from staged changes',
         '• After syncing, changes are saved into a new version'
       ].join('\n'),
