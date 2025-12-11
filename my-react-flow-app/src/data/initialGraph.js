@@ -31,7 +31,7 @@ export const initialNodes = [
         '• Click a node in the Hierarchy to select and focus it on the canvas',
         '• Selecting a node on the canvas also highlights it in the Hierarchy',
         '• Use the + button to expand and show related/child nodes',
-        '• Use the - button to collapse a group back to a single entry',
+        '• Use the – button to collapse a group back to a single entry',
         '• Use the search bar to quickly find a node by name'
       ].join('\n'),
       nodeType: 'descriptive',
