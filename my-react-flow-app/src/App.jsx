@@ -838,6 +838,9 @@ function FlowCanvas() {
   const isDraggingRef = useRef(false);
   const dragStartSnapshotRef = useRef(null);
   const skipHistoryOnceRef = useRef(false);
+  const clipboardRef = useRef(null);
+  const cursorPositionRef = useRef({ x: 0, y: 0 });
+  const hoveredNodeIdRef = useRef(null);
   const historyRef = useRef([]);
   const futureRef = useRef([]);
   const isRestoringRef = useRef(false);
@@ -941,46 +944,156 @@ function FlowCanvas() {
     return rootNodes.length ? rootNodes : nodes;
   }, [nodes, edges]);
 
-  const duplicateSelectedNode = useCallback(() => {
-    if (!selectedNodeId) return;
-    const currentNodes = nodesRef.current ?? [];
-    const source = currentNodes.find((node) => node.id === selectedNodeId);
-    if (!source) return;
+  const captureSelectionPayload = useCallback(
+    (ids) => {
+      const currentNodes = nodesRef.current ?? [];
+      const currentEdges = edgesRef.current ?? [];
+      const idSet = new Set(ids);
+      const selectedNodes = currentNodes.filter((node) => idSet.has(node.id));
+      if (!selectedNodes.length) return null;
+      const selectedEdges = currentEdges.filter((edge) => idSet.has(edge.source) && idSet.has(edge.target));
+      const center = computeCanvasCenter(selectedNodes);
 
-    const existingIds = new Set(currentNodes.map((node) => node.id));
-    const baseId = `${source.id}-copy`;
-    let candidate = baseId;
-    let suffix = 1;
-    while (existingIds.has(candidate)) {
-      candidate = `${baseId}-${suffix}`;
-      suffix += 1;
-    }
-
-    const nodeType = getNodeTypeId(source);
-    const duplicated = attachNodeType(
-      {
-        ...source,
-        id: candidate,
-        position: {
-          x: (source.position?.x ?? 0) + 30,
-          y: (source.position?.y ?? 0) + 30,
+      const entries = selectedNodes.map((node) => ({
+        id: node.id,
+        nodeType: getNodeTypeId(node),
+        data: JSON.parse(JSON.stringify(node.data ?? {})),
+        style: JSON.parse(JSON.stringify(node.style ?? {})),
+        offset: {
+          x: (node.position?.x ?? 0) - center.x,
+          y: (node.position?.y ?? 0) - center.y,
         },
-        data: { ...(source.data ?? {}) },
-        style: { ...(source.style ?? {}) },
-      },
-      nodeType,
-    );
+      }));
 
-    setNodes((snapshot) => {
-      const clearedSelection = snapshot.map((node) => ({ ...node, selected: false }));
-      return [...clearedSelection, { ...duplicated, selected: true }];
-    });
-    setSelectedNodeId(candidate);
-    setSelectedNodeIds([candidate]);
-    setInspectorLabel(duplicated.data?.label ?? '');
-    setInspectorNotes(duplicated.data?.notes ?? '');
-    setInspectorType(getNodeTypeId(duplicated));
-  }, [selectedNodeId]);
+      const clonedEdges = selectedEdges.map((edge) => JSON.parse(JSON.stringify(edge)));
+      return { entries, edges: clonedEdges, center };
+    },
+    [computeCanvasCenter],
+  );
+
+  const copyNodes = useCallback(() => {
+    const ids =
+      (selectedNodeIds && selectedNodeIds.length
+        ? selectedNodeIds
+        : hoveredNodeIdRef.current
+          ? [hoveredNodeIdRef.current]
+          : []) ?? [];
+    if (!ids.length) return;
+    const payload = captureSelectionPayload(ids);
+    if (payload) {
+      clipboardRef.current = payload;
+    }
+  }, [captureSelectionPayload, selectedNodeIds]);
+
+  const pasteCopiedNode = useCallback(
+    (targetPosition) => {
+      const payload = clipboardRef.current;
+      if (!payload || !payload.entries?.length) return;
+      const currentNodes = nodesRef.current ?? [];
+      const currentEdges = edgesRef.current ?? [];
+      const position = targetPosition ?? cursorPositionRef.current ?? { x: 0, y: 0 };
+
+      const existingNodeIds = new Set(currentNodes.map((node) => node.id));
+      const ensureNodeId = (base) => {
+        const safeBase = base && base.trim().length ? base : 'node-copy';
+        let candidate = safeBase;
+        let suffix = 1;
+        while (existingNodeIds.has(candidate)) {
+          candidate = `${safeBase}-${suffix}`;
+          suffix += 1;
+        }
+        existingNodeIds.add(candidate);
+        return candidate;
+      };
+
+      const entries = payload.entries ?? [];
+      const newNodes = [];
+      const idMap = new Map();
+
+      entries.forEach((entry, index) => {
+        const baseId = entry.id || entry.data?.label || `node-${index}`;
+        const newId = ensureNodeId(`${baseId}-copy`);
+        idMap.set(entry.id, newId);
+        const nodeType = entry.nodeType ?? DEFAULT_NODE_TYPE;
+        const newNode = attachNodeType(
+          {
+            id: newId,
+            type: nodeType,
+            position: {
+              x: position.x + (entry.offset?.x ?? 0),
+              y: position.y + (entry.offset?.y ?? 0),
+            },
+            data: { ...(entry.data ?? {}) },
+            style: { ...DEFAULT_NODE_STYLE, ...(entry.style ?? {}) },
+          },
+          nodeType,
+        );
+        newNodes.push(newNode);
+      });
+
+      const existingEdgeIds = new Set(currentEdges.map((edge) => edge.id));
+      const ensureEdgeId = (base) => {
+        const safeBase = base && base.trim().length ? base : 'edge-copy';
+        let candidate = safeBase;
+        let suffix = 1;
+        while (existingEdgeIds.has(candidate)) {
+          candidate = `${safeBase}-${suffix}`;
+          suffix += 1;
+        }
+        existingEdgeIds.add(candidate);
+        return candidate;
+      };
+
+      const newEdges = (payload.edges ?? [])
+        .map((edge, index) => {
+          const newSource = idMap.get(edge.source);
+          const newTarget = idMap.get(edge.target);
+          if (!newSource || !newTarget) return null;
+          const baseId = edge.id || `${newSource}-${newTarget}-${index}`;
+          return {
+            ...edge,
+            id: ensureEdgeId(`${baseId}-copy`),
+            source: newSource,
+            target: newTarget,
+          };
+        })
+        .filter(Boolean);
+
+      setNodes((snapshot) => {
+        const clearedSelection = snapshot.map((node) => ({ ...node, selected: false }));
+        return [...clearedSelection, ...newNodes.map((node) => ({ ...node, selected: true }))];
+      });
+      setEdges((snapshot) => [...snapshot, ...newEdges]);
+
+      const primaryId = newNodes[0]?.id ?? null;
+      setSelectedNodeId(primaryId);
+      setSelectedNodeIds(newNodes.map((node) => node.id));
+      if (primaryId) {
+        setInspectorLabel(newNodes[0]?.data?.label ?? '');
+        setInspectorNotes(newNodes[0]?.data?.notes ?? '');
+        setInspectorType(getNodeTypeId(newNodes[0]));
+      }
+    },
+    [setEdges],
+  );
+
+  const duplicateSelectedNode = useCallback(() => {
+    const ids =
+      (selectedNodeIds && selectedNodeIds.length
+        ? selectedNodeIds
+        : hoveredNodeIdRef.current
+          ? [hoveredNodeIdRef.current]
+          : []) ?? [];
+    if (!ids.length) return;
+    const payload = captureSelectionPayload(ids);
+    if (!payload) return;
+    clipboardRef.current = payload;
+    const targetCenter = {
+      x: (payload.center?.x ?? 0) + 30,
+      y: (payload.center?.y ?? 0) + 30,
+    };
+    pasteCopiedNode(targetCenter);
+  }, [captureSelectionPayload, pasteCopiedNode, selectedNodeIds]);
 
   const applySnapshot = useCallback(
     (snapshot) => {
@@ -1102,12 +1215,24 @@ function FlowCanvas() {
       if (key === 'd') {
         event.preventDefault();
         duplicateSelectedNode();
+        return;
+      }
+
+      if (key === 'c') {
+        event.preventDefault();
+        copyNodes();
+        return;
+      }
+
+      if (key === 'v') {
+        event.preventDefault();
+        pasteCopiedNode();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [duplicateSelectedNode, redo, undo]);
+  }, [copyNodes, duplicateSelectedNode, pasteCopiedNode, redo, undo]);
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
@@ -1167,6 +1292,23 @@ function FlowCanvas() {
       setSelectedNodeIds([]);
     }
   }, []);
+
+  const onNodeMouseEnter = useCallback((_, node) => {
+    hoveredNodeIdRef.current = node?.id ?? null;
+  }, []);
+
+  const onNodeMouseLeave = useCallback(() => {
+    hoveredNodeIdRef.current = null;
+  }, []);
+
+  const onPaneMouseMove = useCallback(
+    (event) => {
+      if (!event) return;
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      cursorPositionRef.current = position;
+    },
+    [screenToFlowPosition],
+  );
 
   const toggleCollapse = useCallback((nodeId) => {
     setCollapsedNodes((prev) => {
@@ -1760,16 +1902,19 @@ function FlowCanvas() {
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onNodeDragStart={onNodeDragStart}
-            onNodeDragStop={onNodeDragStop}
-            onSelectionChange={onSelectionChange}
-            onPaneContextMenu={onPaneContextMenu}
-            deleteKeyCode={['Delete', 'Backspace']}
-            nodeTypes={nodeTypes}
-            fitView
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onNodeDragStart={onNodeDragStart}
+              onNodeDragStop={onNodeDragStop}
+              onNodeMouseEnter={onNodeMouseEnter}
+              onNodeMouseLeave={onNodeMouseLeave}
+              onPaneMouseMove={onPaneMouseMove}
+              onSelectionChange={onSelectionChange}
+              onPaneContextMenu={onPaneContextMenu}
+              deleteKeyCode={['Delete', 'Backspace']}
+              nodeTypes={nodeTypes}
+              fitView
             >
               <Controls />
               <MiniMap />
