@@ -1,0 +1,10 @@
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+export const DEFAULT_NODE_STYLE = { width: 220, minHeight: 80 };
+export const SYNC_ENDPOINT = '/api/generate-code'; // Switch to /api/generate-code when ready for real calls or /api/generate-code-fake for testing
+export const ASK_AI_ENDPOINT = '/api/ask-ai';
+export const MIN_SIDEBAR_WIDTH = 200;
+export const MAX_SIDEBAR_WIDTH = 520;
+export const MIN_BOTTOM_HEIGHT = 30;
+export const MAX_BOTTOM_HEIGHT_RATIO = 0.5;
+export const EXPANDED_BOTTOM_HEIGHT = 200;
+export const HISTORY_LIMIT = 50;
