@@ -25,7 +25,7 @@ import { exampleTemplates, buildTemplatePlacement } from '../data/exampleTemplat
 import { initialEdges, seededInitialNodes } from '../data/initialGraph.js';
 import { nodeImplementations } from '../nodes/nodeImplementations.js';
 import { ALL_NODE_TYPES, DEFAULT_NODE_TYPE, getNodeTypeDefinition, normalizeNodeType } from '../nodeTypes.js';
-import VersionControlPanel from '../VersionControlPanel.jsx';
+import VersionControlPanel from './VersionControlPanel.jsx';
 import {
   attachNodeType,
   clamp,
@@ -392,10 +392,12 @@ function FlowCanvas() {
       if (!active) return;
       if (active === 'left' || active === 'right') {
         const delta = event.clientX - startX;
-        const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+        
         if (active === 'left') {
+          const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
           setLeftSidebarWidth(nextWidth);
         } else {
+          const nextWidth = clamp(startWidth - delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
           setRightSidebarWidth(nextWidth);
         }
         return;
