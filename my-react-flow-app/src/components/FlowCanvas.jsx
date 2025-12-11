@@ -25,7 +25,9 @@ import { exampleTemplates, buildTemplatePlacement } from '../data/exampleTemplat
 import { initialEdges, seededInitialNodes } from '../data/initialGraph.js';
 import { nodeImplementations } from '../nodes/nodeImplementations.js';
 import { ALL_NODE_TYPES, DEFAULT_NODE_TYPE, getNodeTypeDefinition, normalizeNodeType } from '../nodeTypes.js';
+import { useProject } from '../context/ProjectContext.jsx';
 import VersionControlPanel from './VersionControlPanel.jsx';
+import ProjectNameModal from './ProjectNameModal.jsx';
 import {
   attachNodeType,
   clamp,
@@ -41,6 +43,13 @@ import NoteNode from './NoteNode.jsx';
 
 
 function FlowCanvas() {
+  // Project context
+  const { projects, currentProjectId, createProject, getCurrentProject, selectProject, updateCurrentProject, updateProjectVersionControl, deleteProject, isLoaded } = useProject();
+
+  // Modal state
+  const [showProjectNameModal, setShowProjectNameModal] = useState(false);
+  const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState(null);
+
   const firstNode = seededInitialNodes[0];
   const [nodes, setNodes] = useState(seededInitialNodes);
   const [edges, setEdges] = useState(initialEdges);
@@ -392,7 +401,7 @@ function FlowCanvas() {
       if (!active) return;
       if (active === 'left' || active === 'right') {
         const delta = event.clientX - startX;
-        
+
         if (active === 'left') {
           const nextWidth = clamp(startWidth + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
           setLeftSidebarWidth(nextWidth);
@@ -1038,12 +1047,95 @@ function FlowCanvas() {
     [bottomPanelHeight, leftSidebarWidth, rightSidebarWidth],
   );
 
+  const handleNewProject = useCallback(
+    (projectName) => {
+      const newProject = createProject(projectName);
+      // Load the new project's graph
+      setNodes(JSON.parse(JSON.stringify(newProject.nodes)));
+      setEdges(JSON.parse(JSON.stringify(newProject.edges)));
+      setLastSyncedNodes(JSON.parse(JSON.stringify(newProject.lastSyncedNodes)));
+      setLastSyncedEdges(JSON.parse(JSON.stringify(newProject.lastSyncedEdges)));
+      setLastSyncedAt(newProject.lastSyncedAt);
+      setLastSyncedVersion(newProject.lastSyncedVersion);
+      setPendingChanges([]);
+      setStagedChangeIds([]);
+      setShowProjectNameModal(false);
+      // Reset history and UI state
+      historyRef.current = [];
+      futureRef.current = [];
+      const firstNode = newProject.nodes[0];
+      setSelectedNodeId(firstNode?.id ?? null);
+      setSelectedNodeIds(firstNode ? [firstNode.id] : []);
+      setInspectorLabel(firstNode?.data.label ?? '');
+      setInspectorNotes(firstNode?.data.notes ?? '');
+      setInspectorType(getNodeTypeId(firstNode));
+    },
+    [createProject]
+  );
+
+  const handleSelectProject = useCallback(
+    (projectId) => {
+      selectProject(projectId);
+      const project = projects.find((p) => p.id === projectId);
+      if (project) {
+        // Load the selected project's graph
+        setNodes(JSON.parse(JSON.stringify(project.nodes)));
+        setEdges(JSON.parse(JSON.stringify(project.edges)));
+        setLastSyncedNodes(JSON.parse(JSON.stringify(project.lastSyncedNodes)));
+        setLastSyncedEdges(JSON.parse(JSON.stringify(project.lastSyncedEdges)));
+        setLastSyncedAt(project.lastSyncedAt);
+        setLastSyncedVersion(project.lastSyncedVersion);
+        setPendingChanges([]);
+        setStagedChangeIds([]);
+        // Reset history and UI state
+        historyRef.current = [];
+        futureRef.current = [];
+        const firstNode = project.nodes[0];
+        setSelectedNodeId(firstNode?.id ?? null);
+        setSelectedNodeIds(firstNode ? [firstNode.id] : []);
+        setInspectorLabel(firstNode?.data.label ?? '');
+        setInspectorNotes(firstNode?.data.notes ?? '');
+        setInspectorType(getNodeTypeId(firstNode));
+      }
+    },
+    [selectProject, projects]
+  );
+
+  const handleDeleteProject = useCallback(
+    (projectId) => {
+      deleteProject(projectId);
+      setDeleteConfirmProjectId(null);
+    },
+    [deleteProject]
+  );
+
+  // Save current project when nodes/edges change
+  useEffect(() => {
+    if (isLoaded && currentProjectId) {
+      updateCurrentProject(nodes, edges);
+    }
+  }, [nodes, edges, currentProjectId, isLoaded, updateCurrentProject]);
+
+  // Save version control state when it changes
+  useEffect(() => {
+    if (isLoaded && currentProjectId) {
+      updateProjectVersionControl(lastSyncedNodes, lastSyncedEdges, lastSyncedAt, lastSyncedVersion);
+    }
+  }, [lastSyncedNodes, lastSyncedEdges, lastSyncedAt, lastSyncedVersion, currentProjectId, isLoaded, updateProjectVersionControl]);
+
+  // Load project on startup
+  useEffect(() => {
+    if (isLoaded && projects.length > 0 && !currentProjectId) {
+      handleSelectProject(projects[0].id);
+    }
+  }, [isLoaded, projects, currentProjectId, handleSelectProject]);
+
   return (
     <div className="app-shell">
       <header className="top-bar">
         <div className="brand">AI Node Generator</div>
         <div className="top-actions">
-          <button className="ghost">New Project</button>
+          <button className="ghost" onClick={() => setShowProjectNameModal(true)}>New Project</button>
           <button className="primary" onClick={handleSync} disabled={!stagedChangeIds.length || isSyncing}>
             {isSyncing ? 'Syncing...' : 'Sync'}
           </button>
@@ -1055,9 +1147,37 @@ function FlowCanvas() {
           <div className="panel">
             <div className="panel-header">Projects</div>
             <ul className="list">
-              <li className="list-item active">FPS Game</li>
-              <li className="list-item">Vanguard App</li>
-              <li className="list-item">Daily Planner</li>
+              {projects.length > 0 ? (
+                projects.map((project) => (
+                  <li
+                    key={project.id}
+                    className={`list-item project-item ${currentProjectId === project.id ? 'active' : ''}`}
+                    onClick={() => handleSelectProject(project.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleSelectProject(project.id);
+                      }
+                    }}
+                  >
+                    <span className="project-name">{project.name}</span>
+                    <button
+                      className="project-delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmProjectId(project.id);
+                      }}
+                      aria-label="Delete project"
+                      title="Delete project"
+                    >
+                      <img src={binIcon} alt="Delete" />
+                    </button>
+                  </li>
+                ))
+              ) : (
+                <li className="list-item empty-state">No projects yet. Create one!</li>
+              )}
             </ul>
           </div>
           <div className="panel">
@@ -1124,7 +1244,7 @@ function FlowCanvas() {
           <div className="canvas-header">
             <div>
               <div className="eyebrow">Current canvas</div>
-              <div className="title">FPS Game</div>
+              <div className="title">{getCurrentProject()?.name || 'Untitled'}</div>
             </div>
             <div className="canvas-actions">
               <button className="ghost">Export</button>
@@ -1265,6 +1385,31 @@ function FlowCanvas() {
           isSyncing={isSyncing}
           syncError={syncError}
         />
+        {showProjectNameModal && (
+          <ProjectNameModal
+            onConfirm={handleNewProject}
+            onCancel={() => setShowProjectNameModal(false)}
+          />
+        )}
+        {deleteConfirmProjectId && (
+          <div className="modal-overlay">
+            <div className="modal-dialog">
+              <h2>Delete Project?</h2>
+              <p>
+                Are you sure you want to delete "{projects.find((p) => p.id === deleteConfirmProjectId)?.name}"?
+                This action cannot be undone.
+              </p>
+              <div className="modal-actions">
+                <button className="ghost" onClick={() => setDeleteConfirmProjectId(null)}>
+                  Cancel
+                </button>
+                <button className="danger" onClick={() => handleDeleteProject(deleteConfirmProjectId)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

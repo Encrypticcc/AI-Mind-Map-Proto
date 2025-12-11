@@ -137,6 +137,53 @@ body,
   box-shadow: 0 0 0 1px rgba(124, 240, 200, 0.35);
 }
 
+.list-item.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.project-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-delete-btn {
+  display: none;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.project-delete-btn:hover {
+  background-color: rgba(255, 65, 65, 0.2);
+}
+
+.project-delete-btn img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.project-delete-btn:hover img {
+  opacity: 1;
+}
+
+.list-item.project-item:hover .project-delete-btn {
+  display: flex;
+}
+
 .canvas-area {
   background: linear-gradient(160deg, #0f121b, #121624);
   border: 1px solid var(--border);
